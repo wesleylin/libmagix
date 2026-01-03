@@ -2,14 +2,16 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/wesleylin/libmagix"
 )
 
 func main() {
+
 	// 1. Point to your Magdir folder
-	m, err := libmagix.New("./magic/Magdir")
+	m, err := libmagix.New("./magic/Magdir", slog.Default())
 	if err != nil {
 		fmt.Printf("Error loading magic files: %v\n", err)
 		os.Exit(1)
