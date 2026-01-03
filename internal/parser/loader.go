@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -21,6 +22,7 @@ func LoadDirectory(dirPath string) ([]Rule, error) {
 		}
 
 		// Open the magic file
+		fmt.Println("Loading magic file:", path)
 		f, err := os.Open(path)
 		if err != nil {
 			return err
@@ -32,6 +34,7 @@ func LoadDirectory(dirPath string) ([]Rule, error) {
 		if err := p.Parse(f); err != nil {
 			// You might want to log the error and continue
 			// rather than stopping the whole app for one bad file
+			fmt.Printf("Error parsing file %s: %v\n", path, err)
 			return nil
 		}
 

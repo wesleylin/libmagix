@@ -1,6 +1,10 @@
 package libmagix
 
-import "github.com/wesleylin/libmagix/internal/parser"
+import (
+	"fmt"
+
+	"github.com/wesleylin/libmagix/internal/parser"
+)
 
 type Magix struct {
 	rules []parser.Rule
@@ -12,6 +16,8 @@ func New(magicDir string) (*Magix, error) {
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("Loaded", len(rules), "root rules from", magicDir)
+	fmt.Println("Sample rule:", rules[0])
 	return &Magix{rules: rules}, nil
 }
 
