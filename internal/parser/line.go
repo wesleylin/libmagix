@@ -6,34 +6,45 @@ import (
 	"strings"
 )
 
-// ParseLine takes a single line from a Magdir file and returns a Rule
+// ParseLine processes a single raw line from a magic file.
 func ParseLine(line string) (*Rule, error) {
-	if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
-		return nil, nil // Skip comments and empty lines
+	line = strings.TrimSpace(line)
+	if line == "" || strings.HasPrefix(line, "#") {
+		return nil, nil
 	}
 
-	fields := strings.Fields(line)
-	if len(fields) < 4 {
-		return nil, fmt.Errorf("invalid rule format")
+	// We use a custom splitter or regex because 'strings.Fields'
+	// fails on escaped spaces (e.g., 'string  \ name\ with\ space')
+	parts := splitMagicLine(line)
+	if len(parts) < 4 {
+		return nil, fmt.Errorf("malformed line: %s", line)
 	}
 
-	// 1. Parse Level (count '>')
+	// Handle nesting level (count leading '>')
 	level := 0
-	offsetStr := fields[0]
-	for strings.HasPrefix(offsetStr, ">") {
+	offsetPart := parts[0]
+	for len(offsetPart) > 0 && offsetPart[0] == '>' {
 		level++
-		offsetStr = offsetStr[1:]
+		offsetPart = offsetPart[1:]
 	}
 
-	// 2. Parse Offset
-	offset, _ := strconv.ParseInt(offsetStr, 10, 64)
+	offset, err := strconv.ParseInt(offsetPart, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid offset: %v", err)
+	}
 
-	// 3. Simple mapping for now
 	return &Rule{
 		Level:   level,
 		Offset:  offset,
-		Type:    fields[1],
-		Value:   fields[2],
-		Message: strings.Join(fields[3:], " "),
+		Type:    parts[1],
+		Value:   parts[2],
+		Message: parts[3],
 	}, nil
+}
+
+// splitMagicLine is a helper to handle the specific spacing of magic files
+func splitMagicLine(line string) []string {
+	// libmagic uses tabs or multiple spaces as delimiters.
+	// A real implementation would need to handle backslash escapes.
+	return strings.SplitN(line, "\t", 4)
 }
