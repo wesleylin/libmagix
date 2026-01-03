@@ -11,6 +11,7 @@ type Rule struct {
 	Value    any    // The parsed value to compare against
 	Message  string // The description (e.g., "PDF document")
 	Mime     string // The MIME type (if provided)
+	Children []Rule // <--- Add this!
 }
 
 func (r Rule) String() string {
