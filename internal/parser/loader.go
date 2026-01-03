@@ -1,0 +1,44 @@
+package parser
+
+import (
+	"os"
+	"path/filepath"
+)
+
+// LoadDirectory scans a folder and parses all magic files found inside.
+func LoadDirectory(dirPath string) ([]Rule, error) {
+	var allRootRules []Rule
+
+	// Walk the directory
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories and hidden files (like .DS_Store)
+		if info.IsDir() || info.Name()[0] == '.' {
+			return nil
+		}
+
+		// Open the magic file
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		// Use your existing Parser
+		p := NewParser()
+		if err := p.Parse(f); err != nil {
+			// You might want to log the error and continue
+			// rather than stopping the whole app for one bad file
+			return nil
+		}
+
+		// Add these root rules to our master list
+		allRootRules = append(allRootRules, p.Rules...)
+		return nil
+	})
+
+	return allRootRules, err
+}
