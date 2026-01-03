@@ -30,7 +30,7 @@ func LoadDirectory(dirPath string) ([]Rule, error) {
 		defer f.Close()
 
 		// Use your existing Parser
-		p := NewParser()
+		p := NewParser(nil)
 		if err := p.Parse(f); err != nil {
 			// You might want to log the error and continue
 			// rather than stopping the whole app for one bad file

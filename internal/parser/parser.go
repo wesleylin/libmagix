@@ -4,15 +4,20 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 )
 
 type Parser struct {
-	Rules []Rule
+	Rules  []Rule
+	logger *slog.Logger
 }
 
-func NewParser() *Parser {
-	return &Parser{Rules: []Rule{}}
+func NewParser(logger *slog.Logger) *Parser {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &Parser{Rules: []Rule{}, logger: logger}
 }
 
 func (p *Parser) Parse(r io.Reader) error {

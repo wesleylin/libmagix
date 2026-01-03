@@ -15,7 +15,7 @@ func TestParser_Parse(t *testing.T) {
 >4	belong	0x0304	Local file header
 `
 
-	p := NewParser()
+	p := NewParser(nil)
 	err := p.Parse(strings.NewReader(input))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
