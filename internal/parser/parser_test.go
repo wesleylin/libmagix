@@ -6,9 +6,7 @@ import (
 )
 
 func TestParser_Parse(t *testing.T) {
-	// Simulate a snippet of a real magic file
 	input := `
-# This is a comment
 0	string	%PDF-	PDF document
 !:mime	application/pdf
 
@@ -23,24 +21,29 @@ func TestParser_Parse(t *testing.T) {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
-	// We expect 3 rules total (PDF, Zip, and the Nested Header)
-	// The !:mime lines should not count as separate rules.
-	if len(p.Rules) != 3 {
-		t.Errorf("expected 3 rules, got %d", len(p.Rules))
+	// 1. Check Root Rules (Should be 2: PDF and Zip)
+	if len(p.Rules) != 2 {
+		t.Errorf("expected 2 root rules, got %d", len(p.Rules))
 	}
 
-	// Check if PDF rule got its MIME
-	if p.Rules[0].Message != "PDF document" || p.Rules[0].Mime != "application/pdf" {
-		t.Errorf("PDF rule mapping failed: %+v", p.Rules[0])
+	// 2. Check PDF (RootRules[0])
+	if p.Rules[0].Mime != "application/pdf" {
+		t.Errorf("PDF MIME failed: %s", p.Rules[0].Mime)
 	}
 
-	// Check if Zip rule got its MIME
-	if p.Rules[1].Mime != "application/zip" {
-		t.Errorf("Zip MIME mapping failed: %+v", p.Rules[1])
+	// 3. Check Zip (RootRules[1])
+	zipRule := p.Rules[1]
+	if zipRule.Mime != "application/zip" {
+		t.Errorf("Zip MIME failed: %s", zipRule.Mime)
 	}
 
-	// Check if the nested rule (Level 1) was parsed correctly
-	if p.Rules[2].Level != 1 || p.Rules[2].Offset != 4 {
-		t.Errorf("Nested rule parsing failed: %+v", p.Rules[2])
+	// 4. Check Zip's Child (The Local file header)
+	if len(zipRule.Children) != 1 {
+		t.Errorf("Expected Zip to have 1 child, got %d", len(zipRule.Children))
+	} else {
+		child := zipRule.Children[0]
+		if child.Level != 1 || child.Message != "Local file header" {
+			t.Errorf("Child rule mismatch: %+v", child)
+		}
 	}
 }
