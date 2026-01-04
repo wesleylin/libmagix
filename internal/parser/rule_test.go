@@ -98,9 +98,10 @@ func TestRule_MatchByte(t *testing.T) {
 		{
 			name: "Mismatch in data",
 			rule: Rule{
-				Offset: 0,
-				Type:   "string",
-				Value:  []byte("GIF89a"),
+				Offset:   0,
+				Type:     "string",
+				Value:    []byte("GIF89a"),
+				ValueRaw: []byte("GIF89a"),
 			},
 			input:    []byte("JPEG image data"),
 			expected: false,
@@ -108,9 +109,10 @@ func TestRule_MatchByte(t *testing.T) {
 		{
 			name: "Input data too short for offset",
 			rule: Rule{
-				Offset: 10,
-				Type:   "string",
-				Value:  []byte("tiny"),
+				Offset:   10,
+				Type:     "string",
+				Value:    []byte("tiny"),
+				ValueRaw: []byte("tiny"),
 			},
 			input:    []byte("short"),
 			expected: false,
@@ -118,9 +120,10 @@ func TestRule_MatchByte(t *testing.T) {
 		{
 			name: "Input data too short for signature length",
 			rule: Rule{
-				Offset: 0,
-				Type:   "string",
-				Value:  []byte("LONG_SIGNATURE"),
+				Offset:   0,
+				Type:     "string",
+				Value:    []byte("LONG_SIGNATURE"),
+				ValueRaw: []byte("LONG_SIGNATURE"),
 			},
 			input:    []byte("SHORT"),
 			expected: false,

@@ -13,30 +13,33 @@ func TestMatchTree(t *testing.T) {
 	//   Level 1: DOCX (specifically looks for 'word/' inside the zip structure)
 	rules := []parser.Rule{
 		{
-			Level:   0,
-			Offset:  0,
-			Type:    "string",
-			Value:   "PK",
-			Message: "Zip archive",
-			Mime:    "application/zip",
+			Level:    0,
+			Offset:   0,
+			Type:     "string",
+			Value:    "PK",
+			ValueRaw: []byte("PK"),
+			Message:  "Zip archive",
+			Mime:     "application/zip",
 			Children: []parser.Rule{
 				{
-					Level:   1,
-					Offset:  30, // Random offset for example
-					Type:    "string",
-					Value:   "word/",
-					Message: "Microsoft Word",
-					Mime:    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+					Level:    1,
+					Offset:   30, // Random offset for example
+					Type:     "string",
+					Value:    "word/",
+					ValueRaw: []byte("word/"),
+					Message:  "Microsoft Word",
+					Mime:     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 				},
 			},
 		},
 		{
-			Level:   0,
-			Offset:  0,
-			Type:    "string",
-			Value:   "%PDF-",
-			Message: "PDF document",
-			Mime:    "application/pdf",
+			Level:    0,
+			Offset:   0,
+			Type:     "string",
+			Value:    "%PDF-",
+			ValueRaw: []byte("%PDF-"),
+			Message:  "PDF document",
+			Mime:     "application/pdf",
 		},
 	}
 

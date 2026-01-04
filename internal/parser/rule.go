@@ -51,10 +51,7 @@ func (r *Rule) Match(data []byte) bool {
 }
 
 func (r *Rule) MatchByte(data []byte) bool {
-	val, ok := r.Value.([]byte)
-	if !ok {
-		return false
-	}
+	val := r.ValueRaw
 
 	end := int(r.Offset) + len(val)
 	if r.Offset < 0 || len(data) < end {
