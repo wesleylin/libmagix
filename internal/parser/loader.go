@@ -29,8 +29,6 @@ func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 		}
 		defer f.Close()
 
-		// tempRules := []Rule{}
-
 		tempRules, err := p.Parse(f)
 		if err != nil {
 			// You might want to log the error and continue
