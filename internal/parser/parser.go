@@ -9,7 +9,6 @@ import (
 )
 
 type Parser struct {
-	Rules  []Rule
 	logger *slog.Logger
 }
 
@@ -17,10 +16,12 @@ func NewParser(logger *slog.Logger) *Parser {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Parser{Rules: []Rule{}, logger: logger}
+	return &Parser{logger: logger}
 }
 
-func (p *Parser) Parse(r io.Reader) error {
+func (p *Parser) Parse(r io.Reader) ([]Rule, error) {
+	tempRules := []Rule{}
+
 	scanner := bufio.NewScanner(r)
 
 	// This map keeps track of the last rule added at each level.
@@ -55,7 +56,7 @@ func (p *Parser) Parse(r io.Reader) error {
 		rule, err := ParseLine(line)
 		if err != nil {
 			// CRITICAL: Wrap the error with the line number and content
-			return fmt.Errorf("line %d: %w (content: %q)", lineNum, err, line)
+			return nil, fmt.Errorf("line %d: %w (content: %q)", lineNum, err, line)
 		}
 		if rule == nil {
 			continue
@@ -63,8 +64,8 @@ func (p *Parser) Parse(r io.Reader) error {
 
 		if rule.Level == 0 {
 			// Top-level rule: add to RootRules
-			p.Rules = append(p.Rules, *rule)
-			levelParents[0] = &p.Rules[len(p.Rules)-1]
+			tempRules = append(tempRules, *rule)
+			levelParents[0] = &tempRules[len(tempRules)-1]
 		} else {
 			// Sub-rule: Find the parent at Level - 1
 			parent, ok := levelParents[rule.Level-1]
@@ -78,5 +79,5 @@ func (p *Parser) Parse(r io.Reader) error {
 		lastAddedRule = levelParents[rule.Level]
 	}
 	// fmt.Println("Finished parsing with", len(p.Rules), "root rules.")
-	return scanner.Err()
+	return tempRules, scanner.Err()
 }

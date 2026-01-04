@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +34,8 @@ func TestLoadDirectory(t *testing.T) {
 	}
 
 	// 5. Run the Loader
-	rules, err := LoadDirectory(tmpDir)
+	p := NewParser(nil)
+	rules, err := p.LoadDirectory(tmpDir)
 	if err != nil {
 		t.Fatalf("LoadDirectory failed: %v", err)
 	}
@@ -41,6 +43,10 @@ func TestLoadDirectory(t *testing.T) {
 	// 6. Verify the results
 	// We expect 2 Root Rules (PDF and Zip)
 	if len(rules) != 2 {
+		for _, r := range rules {
+			fmt.Printf("Rule: %+v\n", r)
+		}
+
 		t.Errorf("expected 2 root rules, got %d", len(rules))
 	}
 

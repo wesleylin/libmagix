@@ -18,7 +18,9 @@ func New(magicDir string, logger *slog.Logger) (*Magix, error) {
 		logger = slog.Default()
 	}
 
-	rules, err := parser.LoadDirectory(magicDir)
+	p := parser.NewParser(logger)
+
+	rules, err := p.LoadDirectory(magicDir)
 	if err != nil {
 		return nil, err
 	}

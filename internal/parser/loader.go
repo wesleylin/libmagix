@@ -7,7 +7,7 @@ import (
 )
 
 // LoadDirectory scans a folder and parses all magic files found inside.
-func LoadDirectory(dirPath string) ([]Rule, error) {
+func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 	var allRootRules []Rule
 
 	// Walk the directory
@@ -29,9 +29,10 @@ func LoadDirectory(dirPath string) ([]Rule, error) {
 		}
 		defer f.Close()
 
-		// Use your existing Parser
-		p := NewParser(nil)
-		if err := p.Parse(f); err != nil {
+		// tempRules := []Rule{}
+
+		tempRules, err := p.Parse(f)
+		if err != nil {
 			// You might want to log the error and continue
 			// rather than stopping the whole app for one bad file
 			fmt.Printf("Error parsing file %s: %v\n", path, err)
@@ -39,7 +40,12 @@ func LoadDirectory(dirPath string) ([]Rule, error) {
 		}
 
 		// Add these root rules to our master list
-		allRootRules = append(allRootRules, p.Rules...)
+		allRootRules = append(allRootRules, tempRules...)
+
+		// Add these root rules to our master list
+		fmt.Println("existing rules:", allRootRules)
+		// allRootRules = append(allRootRules, p.Rules...)
+		fmt.Println("Total rules so far:", allRootRules)
 		return nil
 	})
 

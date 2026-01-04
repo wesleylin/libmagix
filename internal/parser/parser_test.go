@@ -16,23 +16,23 @@ func TestParser_Parse(t *testing.T) {
 `
 
 	p := NewParser(nil)
-	err := p.Parse(strings.NewReader(input))
+	rules, err := p.Parse(strings.NewReader(input))
 	if err != nil {
 		t.Fatalf("Parse failed: %v", err)
 	}
 
 	// 1. Check Root Rules (Should be 2: PDF and Zip)
-	if len(p.Rules) != 2 {
-		t.Errorf("expected 2 root rules, got %d", len(p.Rules))
+	if len(rules) != 2 {
+		t.Errorf("expected 2 root rules, got %d", len(rules))
 	}
 
 	// 2. Check PDF (RootRules[0])
-	if p.Rules[0].Mime != "application/pdf" {
-		t.Errorf("PDF MIME failed: %s", p.Rules[0].Mime)
+	if rules[0].Mime != "application/pdf" {
+		t.Errorf("PDF MIME failed: %s", rules[0].Mime)
 	}
 
 	// 3. Check Zip (RootRules[1])
-	zipRule := p.Rules[1]
+	zipRule := rules[1]
 	if zipRule.Mime != "application/zip" {
 		t.Errorf("Zip MIME failed: %s", zipRule.Mime)
 	}

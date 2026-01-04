@@ -18,6 +18,10 @@ type Rule struct {
 }
 
 func (r Rule) String() string {
+	return fmt.Sprintf("L%d @%d Type:%s Value:%v -> %s", r.Level, r.Offset, r.Type, r.Value, r.Message)
+}
+
+func (r Rule) RawString() string {
 	return fmt.Sprintf("L%d @%d %s=%v -> %s", r.Level, r.Offset, r.Type, r.Value, r.Message)
 }
 
