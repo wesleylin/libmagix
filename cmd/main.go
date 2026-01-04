@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log/slog"
 	"os"
@@ -10,8 +11,18 @@ import (
 
 func main() {
 
+	verbose := flag.Bool("v", false, "enable debug logging")
+	flag.Parse()
+
+	var logger *slog.Logger
+	if *verbose {
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	} else {
+		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	}
+
 	// 1. Point to your Magdir folder
-	m, err := libmagix.New("./magic/Magdir", slog.Default())
+	m, err := libmagix.New("./magic/Magdir", logger)
 	if err != nil {
 		fmt.Printf("Error loading magic files: %v\n", err)
 		os.Exit(1)
@@ -22,7 +33,9 @@ func main() {
 		return
 	}
 	// 2. Read file
-	filePath := os.Args[1]
+	remainingArgs := flag.Args()
+
+	filePath := remainingArgs[0]
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Printf("Error reading file: %v\n", err)
