@@ -1,3 +1,2 @@
-0	string	GIF8	GIF image data
->4	string	9a	\b, version 89a
->4	string	87a	\b, version 87a
+0	string	GIF89a	GIF image data (89a)
+0	string	GIF87a	GIF image data (87a)
