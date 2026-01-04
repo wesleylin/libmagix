@@ -57,3 +57,82 @@ func TestRule_Match(t *testing.T) {
 		})
 	}
 }
+
+func TestRule_MatchByte(t *testing.T) {
+	tests := []struct {
+		name     string
+		rule     Rule
+		input    []byte
+		expected bool
+	}{
+		{
+			name: "Exact match at offset 0",
+			rule: Rule{
+				Offset: 0,
+				Type:   "string",
+				Value:  []byte("GIF89a"),
+			},
+			input:    []byte("GIF89a image data here"),
+			expected: true,
+		},
+		{
+			name: "Binary match (PNG header)",
+			rule: Rule{
+				Offset: 0,
+				Type:   "string",
+				Value:  []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A},
+			},
+			input:    []byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00},
+			expected: true,
+		},
+		{
+			name: "Match at non-zero offset",
+			rule: Rule{
+				Offset: 4,
+				Type:   "string",
+				Value:  []byte("test"),
+			},
+			input:    []byte("____test_data"),
+			expected: true,
+		},
+		{
+			name: "Mismatch in data",
+			rule: Rule{
+				Offset: 0,
+				Type:   "string",
+				Value:  []byte("GIF89a"),
+			},
+			input:    []byte("JPEG image data"),
+			expected: false,
+		},
+		{
+			name: "Input data too short for offset",
+			rule: Rule{
+				Offset: 10,
+				Type:   "string",
+				Value:  []byte("tiny"),
+			},
+			input:    []byte("short"),
+			expected: false,
+		},
+		{
+			name: "Input data too short for signature length",
+			rule: Rule{
+				Offset: 0,
+				Type:   "string",
+				Value:  []byte("LONG_SIGNATURE"),
+			},
+			input:    []byte("SHORT"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.rule.MatchByte(tt.input)
+			if got != tt.expected {
+				t.Errorf("MatchByte() = %v, want %v for input %v", got, tt.expected, tt.input)
+			}
+		})
+	}
+}
