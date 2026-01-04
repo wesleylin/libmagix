@@ -33,12 +33,32 @@ func ParseLine(line string) (*Rule, error) {
 		return nil, fmt.Errorf("invalid offset: %v", err)
 	}
 
+	rawValue := parts[2]
+	var processedValue []byte
+
+	// 2. Convert the escaped string into actual bytes
+	if strings.Contains(rawValue, `\`) {
+		// Wrap in quotes so strconv.Unquote recognizes it as a Go-style string literal
+		quoted := `"` + rawValue + `"`
+		unquoted, err := strconv.Unquote(quoted)
+		if err != nil {
+			// Fallback: If unquoting fails, use the raw bytes
+			// (This happens if there are invalid escape sequences)
+			processedValue = []byte(rawValue)
+		} else {
+			processedValue = []byte(unquoted)
+		}
+	} else {
+		processedValue = []byte(rawValue)
+	}
+
 	return &Rule{
-		Level:   level,
-		Offset:  offset,
-		Type:    parts[1],
-		Value:   parts[2],
-		Message: parts[3],
+		Level:    level,
+		Offset:   offset,
+		Type:     parts[1],
+		Value:    parts[2],
+		ValueRaw: processedValue,
+		Message:  parts[3],
 	}, nil
 }
 

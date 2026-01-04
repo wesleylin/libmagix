@@ -12,6 +12,7 @@ type Rule struct {
 	Type     string // e.g., "string", "lelong", "belong", "short"
 	Operator string // e.g., "=", "&", ">"
 	Value    any    // The parsed value to compare against
+	ValueRaw []byte // The raw bytes of the value
 	Message  string // The description (e.g., "PDF document")
 	Mime     string // The MIME type (if provided)
 	Children []Rule // <--- Add this!
