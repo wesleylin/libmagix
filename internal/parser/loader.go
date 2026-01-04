@@ -41,9 +41,7 @@ func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 		allRootRules = append(allRootRules, tempRules...)
 
 		// Add these root rules to our master list
-		fmt.Println("existing rules:", allRootRules)
-		// allRootRules = append(allRootRules, p.Rules...)
-		fmt.Println("Total rules so far:", allRootRules)
+		p.logger.Debug("existing rules:" + fmt.Sprint(len(allRootRules)))
 		return nil
 	})
 

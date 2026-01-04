@@ -1,7 +1,6 @@
 package libmagix
 
 import (
-	"fmt"
 	"log/slog"
 
 	"github.com/wesleylin/libmagix/internal/parser"
@@ -24,8 +23,8 @@ func New(magicDir string, logger *slog.Logger) (*Magix, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Loaded", len(rules), "root rules from", magicDir)
-	fmt.Println("Sample rule:", rules[0])
+	logger.Debug("Loaded", len(rules), "root rules from", magicDir)
+	logger.Debug("Sample rule:", rules[0])
 	return &Magix{rules: rules, logger: logger}, nil
 }
 
