@@ -2,6 +2,7 @@ package libmagix
 
 import (
 	"log/slog"
+	"os"
 
 	"github.com/wesleylin/libmagix/internal/parser"
 )
@@ -12,19 +13,29 @@ type Magix struct {
 }
 
 // New loads all magic files from the specified directory.
-func New(magicDir string, logger *slog.Logger) (*Magix, error) {
+func New(magicPath string, logger *slog.Logger) (*Magix, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
 
 	p := parser.NewParser(logger)
 
-	rules, err := p.LoadDirectory(magicDir)
+	info, err := os.Stat(magicPath)
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug("Loaded", len(rules), "root rules from", magicDir)
-	logger.Debug("Sample rule:", rules[0])
+
+	var rules []parser.Rule
+	if info.IsDir() {
+		rules, err = p.LoadDirectory(magicPath)
+	} else {
+		rules, err = p.LoadFile(magicPath)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	logger.Debug("Loaded", slog.Int("rules", len(rules)), slog.String("root rules from", magicPath))
 	return &Magix{rules: rules, logger: logger}, nil
 }
 

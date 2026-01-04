@@ -6,6 +6,16 @@ import (
 	"path/filepath"
 )
 
+func (p *Parser) LoadFile(path string) ([]Rule, error) {
+	p.logger.Debug("loading single magic file", "path", path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return p.Parse(f)
+}
+
 // LoadDirectory scans a folder and parses all magic files found inside.
 func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 	var allRootRules []Rule
