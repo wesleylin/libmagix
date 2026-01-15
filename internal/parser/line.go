@@ -65,6 +65,54 @@ func ParseLine(line string) (*Rule, error) {
 
 // splitMagicLine is a helper to handle the specific spacing of magic files
 func splitMagicLine(line string) []string {
+	var parts []string
+	var currentToken strings.Builder
+	escaped := false
+
+	// We want 3 specific columns (Offset, Type, Value)
+	// and then everything else is the Message (part 4).
+	maxParts := 3
+
+	for i, r := range line {
+		// If we already have the first 3 parts, the rest of the string is the Message.
+		if len(parts) >= maxParts {
+			parts = append(parts, strings.TrimSpace(line[i:]))
+			return parts
+		}
+
+		if escaped {
+			currentToken.WriteRune(r)
+			escaped = false
+			continue
+		}
+
+		if r == '\\' {
+			escaped = true
+			currentToken.WriteRune(r) // Keep the backslash for now so ParseLine can handle it
+			continue
+		}
+
+		// Split on spaces or tabs
+		if r == ' ' || r == '\t' {
+			if currentToken.Len() > 0 {
+				parts = append(parts, currentToken.String())
+				currentToken.Reset()
+			}
+		} else {
+			currentToken.WriteRune(r)
+		}
+	}
+
+	// Append the last token if we didn't hit the limit (e.g., short lines)
+	if currentToken.Len() > 0 {
+		parts = append(parts, currentToken.String())
+	}
+
+	return parts
+}
+
+// splitMagicLine is a helper to handle the specific spacing of magic files
+func splitMagicLine2(line string) []string {
 	// libmagic uses tabs or multiple spaces as delimiters.
 	// A real implementation would need to handle backslash escapes.
 	return strings.SplitN(line, "\t", 4)
