@@ -8,10 +8,14 @@ import (
 
 // Rule represents a single line in a magic file
 type Rule struct {
-	Level    int    // Number of '>' symbols (nesting)
-	Offset   int64  // Byte offset to check
-	Type     string // e.g., "string", "lelong", "belong", "short"
-	Operator string // e.g., "=", "&", ">"
+	Level  int    // Number of '>' symbols (nesting)
+	Offset int64  // Byte offset to check
+	Type   string // e.g., "string", "lelong", "belong", "short"
+
+	Operator string // e.g., "=", "&", ">", "<", "!"
+	Mask     uint64 // The mask to apply (if any)
+	HasMask  bool   // Helper to know if we should apply the mask
+
 	Value    any    // Can be string, uint32, uint16, uint8
 	ValueRaw []byte // The raw bytes of the value
 	Message  string // The description (e.g., "PDF document")
