@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 )
 
@@ -11,7 +12,7 @@ type Rule struct {
 	Offset   int64  // Byte offset to check
 	Type     string // e.g., "string", "lelong", "belong", "short"
 	Operator string // e.g., "=", "&", ">"
-	Value    any    // The parsed value to compare against
+	Value    any    // Can be string, uint32, uint16, uint8
 	ValueRaw []byte // The raw bytes of the value
 	Message  string // The description (e.g., "PDF document")
 	Mime     string // The MIME type (if provided)
@@ -44,7 +45,57 @@ func (r *Rule) Match(data []byte) bool {
 		searchArea := data[r.Offset:]
 		return bytes.HasPrefix(searchArea, []byte(valStr))
 
-	// We will add "belong", "lelong", etc. next!
+	case "belong": // Big Endian Long (4 bytes)
+		if r.Offset+4 > int64(len(data)) {
+			return false
+		}
+		actual := binary.BigEndian.Uint32(data[r.Offset : r.Offset+4])
+		expected, ok := r.Value.(uint32)
+		if !ok {
+			return false
+		}
+		return actual == expected
+
+	case "lelong": // Little Endian Long (4 bytes)
+		if r.Offset+4 > int64(len(data)) {
+			return false
+		}
+		actual := binary.LittleEndian.Uint32(data[r.Offset : r.Offset+4])
+		expected, ok := r.Value.(uint32)
+		if !ok {
+			return false
+		}
+		return actual == expected
+
+	case "short", "beshort": // Big Endian Short (2 bytes)
+		if r.Offset+2 > int64(len(data)) {
+			return false
+		}
+		actual := binary.BigEndian.Uint16(data[r.Offset : r.Offset+2])
+		expected, ok := r.Value.(uint16)
+		if !ok {
+			return false
+		}
+		return actual == expected
+
+	case "leshort": // Little Endian Short (2 bytes)
+		if r.Offset+2 > int64(len(data)) {
+			return false
+		}
+		actual := binary.LittleEndian.Uint16(data[r.Offset : r.Offset+2])
+		expected, ok := r.Value.(uint16)
+		if !ok {
+			return false
+		}
+		return actual == expected
+
+	case "byte":
+		actual := data[r.Offset]
+		expected, ok := r.Value.(uint8)
+		if !ok {
+			return false
+		}
+		return actual == expected
 	default:
 		return false
 	}
