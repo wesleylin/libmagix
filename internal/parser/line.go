@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"text/scanner"
 )
 
 // ParseLine processes a single raw line from a magic file.
@@ -67,4 +68,39 @@ func splitMagicLine(line string) []string {
 	// libmagic uses tabs or multiple spaces as delimiters.
 	// A real implementation would need to handle backslash escapes.
 	return strings.SplitN(line, "\t", 4)
+}
+
+func ParseLine2(line string) (*Rule, error) {
+	var s scanner.Scanner
+	s.Init(strings.NewReader(line))
+
+	// Configure scanner to handle C-style numbers and strings
+	s.Mode = scanner.ScanInts | scanner.ScanFloats | scanner.ScanStrings
+
+	tok := s.Scan()
+	if tok == scanner.EOF {
+		return nil, nil
+	}
+	offsetStr := s.TokenText()
+
+	// 2. Parse Type
+	tok = s.Scan()
+	typeStr := s.TokenText()
+
+	// 3. Parse Test Value
+	tok = s.Scan()
+	valueStr := s.TokenText()
+
+	// 4. Message rest of line
+	restOfLine := line[s.Pos().Offset:]
+	message := strings.TrimSpace(restOfLine)
+
+	fmt.Println(offsetStr)
+
+	return &Rule{
+		Offset:  0, // Keep as string for now to handle (0x3c) later
+		Type:    typeStr,
+		Value:   valueStr,
+		Message: message,
+	}, nil
 }
