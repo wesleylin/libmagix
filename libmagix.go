@@ -49,7 +49,8 @@ func (m *Magix) Identify(data []byte) *parser.Rule {
 func MatchTree(data []byte, rules []parser.Rule) *parser.Rule {
 
 	for i := range rules {
-		if rules[i].MatchByte(data) {
+		// todo check if using Match works better than MatchByte
+		if rules[i].Match(data) {
 			// if any children match, prefer them.
 			// Children are more specific (e.g., "Zip" -> "DocX").
 			childMatch := MatchTree(data, rules[i].Children)
