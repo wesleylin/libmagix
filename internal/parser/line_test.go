@@ -65,3 +65,59 @@ func TestParseLine(t *testing.T) {
 		})
 	}
 }
+
+func TestParseTypeAndMask(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		wantType    string
+		wantMask    uint64
+		wantHasMask bool
+		wantErr     bool
+	}{
+		{"No Mask", "belong", "belong", 0, false, false},
+		{"Hex Mask", "belong&0xFFFF", "belong", 0xFFFF, true, false},
+		{"Decimal Mask", "lelong&255", "lelong", 255, true, false},
+		{"Invalid Mask", "belong&invalid", "", 0, false, true},
+		{"Empty Mask", "belong&", "", 0, false, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotType, gotMask, gotHasMask, err := parseTypeAndMask(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseTypeAndMask() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotType != tt.wantType || gotMask != tt.wantMask || gotHasMask != tt.wantHasMask {
+				t.Errorf("got (%s, %v, %v), want (%s, %v, %v)",
+					gotType, gotMask, gotHasMask, tt.wantType, tt.wantMask, tt.wantHasMask)
+			}
+		})
+	}
+}
+
+func TestParseOperator(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantOp  string
+		wantVal string
+	}{
+		{"Explicit Equal", "=0x20", "=", "0x20"},
+		{"Greater Than", ">10", ">", "10"},
+		{"Not Equal", "!0", "!", "0"},
+		{"Bitwise And", "&0xFF", "&", "0xFF"},
+		{"Default Equal", "1234", "=", "1234"},
+		{"Empty Value", ">", ">", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotOp, gotVal := parseOperator(tt.input)
+			if gotOp != tt.wantOp || gotVal != tt.wantVal {
+				t.Errorf("got (%s, %s), want (%s, %s)", gotOp, gotVal, tt.wantOp, tt.wantVal)
+			}
+		})
+	}
+}

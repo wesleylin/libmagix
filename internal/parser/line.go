@@ -159,3 +159,37 @@ func splitMagicLine2(line string) []string {
 	// A real implementation would need to handle backslash escapes.
 	return strings.SplitN(line, "\t", 4)
 }
+
+// parseTypeAndMask handles "belong&0xFFFF"
+func parseTypeAndMask(raw string) (string, uint64, bool, error) {
+	if !strings.Contains(raw, "&") {
+		return raw, 0, false, nil
+	}
+
+	parts := strings.SplitN(raw, "&", 2)
+	typeStr := parts[0]
+	maskStr := parts[1]
+
+	// Parse mask (usually hex)
+	mask, err := strconv.ParseUint(maskStr, 0, 64)
+	if err != nil {
+		return "", 0, false, fmt.Errorf("invalid mask: %s", maskStr)
+	}
+
+	return typeStr, mask, true, nil
+}
+
+// parseOperator handles ">10", "=0x20", "!0"
+func parseOperator(raw string) (string, string) {
+	// Standard magic operators
+	ops := []string{"=", "<", ">", "&", "^", "!"}
+
+	for _, op := range ops {
+		if strings.HasPrefix(raw, op) {
+			return op, raw[len(op):]
+		}
+	}
+
+	// Default operator is equality
+	return "=", raw
+}
