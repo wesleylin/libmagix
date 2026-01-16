@@ -1,8 +1,9 @@
 package parser
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestParseLine(t *testing.T) {
@@ -21,6 +22,7 @@ func TestParseLine(t *testing.T) {
 				Type:     "string",
 				Value:    "%PDF-",
 				ValueRaw: []byte("%PDF-"),
+				Operator: "=",
 				Message:  "PDF document",
 			},
 			wantErr: false,
@@ -34,6 +36,7 @@ func TestParseLine(t *testing.T) {
 				Type:     "string",
 				Value:    "1.4",
 				ValueRaw: []byte("1.4"),
+				Operator: "=",
 				Message:  "version 1.4",
 			},
 			wantErr: false,
@@ -59,8 +62,8 @@ func TestParseLine(t *testing.T) {
 				t.Errorf("ParseLine() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("ParseLine() = %v, want %v", got, tt.want)
+			if diff := cmp.Diff(tt.want, got); diff != "" {
+				t.Errorf("ParseLine() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

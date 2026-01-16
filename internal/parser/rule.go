@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"strings"
 )
 
 // Rule represents a single line in a magic file
@@ -24,7 +25,33 @@ type Rule struct {
 }
 
 func (r Rule) String() string {
-	return fmt.Sprintf("L%d @%d Type:%s Value:%v -> %s", r.Level, r.Offset, r.Type, r.Value, r.Message)
+	// 1. Create a prefix based on level for visual hierarchy
+	indent := strings.Repeat("> ", r.Level)
+
+	// 2. Format the type with its mask if applicable
+	typeDisplay := r.Type
+	if r.HasMask {
+		typeDisplay = fmt.Sprintf("%s&0x%X", r.Type, r.Mask)
+	}
+
+	// 3. Handle the children count
+	childInfo := ""
+	if len(r.Children) > 0 {
+		childInfo = fmt.Sprintf(" (children: %d)", len(r.Children))
+	}
+
+	// 4. Combine into a clean, scannable format
+	// Use %q for Value to safely show strings/bytes with non-printable chars
+	return fmt.Sprintf("%-10s L%d Off:%-5d %-15s %s %q -> %q%s",
+		indent,
+		r.Level,
+		r.Offset,
+		typeDisplay,
+		r.Operator,
+		r.Value,
+		r.Message,
+		childInfo,
+	)
 }
 
 func (r Rule) RawString() string {

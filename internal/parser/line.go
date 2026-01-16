@@ -33,9 +33,20 @@ func ParseLine(line string) (*Rule, error) {
 		return nil, fmt.Errorf("invalid offset: %v", err)
 	}
 
-	typeStr := parts[1]
-	valueStr := parts[2]
-	parsedValue, err := parseTypeValue(typeStr, valueStr)
+	rawType := parts[1]
+	rawValue := parts[2]
+
+	// parsing for mask and hashmask
+	typeStr, mask, hasMask, err := parseTypeAndMask(rawType)
+	if err != nil {
+		return nil, err
+	}
+	op, cleanValueStr := parseOperator(rawValue)
+
+	parsedValue, err := parseTypeValue(typeStr, cleanValueStr)
+	if err != nil {
+		return nil, err
+	}
 
 	// Populate ValueRaw for string types (useful for debugging or legacy string matching)
 	var valueRaw []byte
@@ -47,6 +58,9 @@ func ParseLine(line string) (*Rule, error) {
 		Level:    level,
 		Offset:   offset,
 		Type:     typeStr,
+		Mask:     mask,
+		HasMask:  hasMask,
+		Operator: op,
 		Value:    parsedValue,
 		ValueRaw: valueRaw,
 		Message:  parts[3],
