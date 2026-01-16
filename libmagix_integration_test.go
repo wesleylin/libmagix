@@ -3,6 +3,7 @@ package libmagix_test
 import (
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/wesleylin/libmagix"
@@ -58,5 +59,47 @@ func TestJavaIdentification(t *testing.T) {
 	}
 	if got.Message != want {
 		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}
+
+func TestHighVersionIdentification(t *testing.T) {
+	// 1. Setup Logger
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	// 2. Create a temporary directory for this specific test
+	tmpDir := t.TempDir()
+	magicFilePath := filepath.Join(tmpDir, "version_check")
+
+	// 3. Write the specific magic rule we want to test
+	//    Rule: First byte must be greater than 10
+	magicContent := "0\tbyte\t>10\tHigh Version Format\n"
+	if err := os.WriteFile(magicFilePath, []byte(magicContent), 0644); err != nil {
+		t.Fatalf("Failed to write mock magic file: %v", err)
+	}
+
+	// 4. Initialize the engine pointing to our temp file
+	engine, err := libmagix.New(magicFilePath, logger)
+	if err != nil {
+		t.Fatalf("Failed to initialize engine: %v", err)
+	}
+
+	// 5. Test Case A: Should Match (Value 11 > 10)
+	dataMatch := []byte{11, 0x00, 0x00}
+	got := engine.Identify(dataMatch)
+	want := "High Version Format"
+
+	if got == nil {
+		t.Fatal("Expected match for byte > 10, got nil")
+	}
+	if got.Message != want {
+		t.Errorf("Identify() = %q; want %q", got.Message, want)
+	}
+
+	// 6. Test Case B: Should NOT Match (Value 10 is not > 10)
+	dataNoMatch := []byte{10, 0x00, 0x00}
+	gotNoMatch := engine.Identify(dataNoMatch)
+
+	if gotNoMatch != nil {
+		t.Errorf("Expected nil match for value 10, got %q", gotNoMatch.Message)
 	}
 }
