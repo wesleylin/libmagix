@@ -1,0 +1,2 @@
+# Detects a fake format where the first byte must be > 10
+0    byte    >10    High Version Format
