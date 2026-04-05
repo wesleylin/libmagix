@@ -12,6 +12,8 @@ A lightweight, pure Go implementation of the `libmagic` file identification engi
 
 ```bash
 go get [github.com/wesleylin/libmagix](https://github.com/wesleylin/libmagix)
+
+go test ./...
 ```
 
 ## Quick start
@@ -52,6 +54,8 @@ libmagix follows a three-step process to identify files:
 1. Loading: The Loader walks through a directory of magic files.
 2. Parsing: The Parser converts flat magic lines into a recursive Rule tree.
 3. Matching: The Engine performs a depth-first search on the tree, checking byte offsets and values against the input data.
+
+magic files come from https://github.com/file/file/tree/master/magic/Magdir
 
 ## Supported Features
 
