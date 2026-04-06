@@ -211,3 +211,34 @@ func TestScriptIdentification(t *testing.T) {
 		t.Errorf("Identify(bash) = %v, want bash shell script", got)
 	}
 }
+
+func TestPEIdentification(t *testing.T) {
+	// 1. Initialize engine
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/pe", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	// 2. Create fake PE header data
+	// Offset 0: MZ
+	// Offset 0x3C: 0x40 (pointer to PE)
+	// Offset 0x40: PE\0\0
+	// Offset 0x44: 0x8664 (x86-64)
+	peData := make([]byte, 256)
+	copy(peData[0:2], "MZ")
+	binary.LittleEndian.PutUint32(peData[0x3c:], 0x40)
+	copy(peData[0x40:], "PE\x00\x00")
+	binary.LittleEndian.PutUint16(peData[0x44:], 0x8664)
+
+	// 3. Identify
+	got := engine.Identify(peData)
+	want := "x86-64" // Deepest match in our simplified PE magic
+
+	if got == nil {
+		t.Fatal("Expected identification, got nil")
+	}
+	if got.Message != want {
+		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}

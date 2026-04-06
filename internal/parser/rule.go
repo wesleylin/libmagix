@@ -20,6 +20,13 @@ type Rule struct {
 	Message  string
 	Mime     string
 	MatchAny bool // Support for 'x' value in magic files
+
+	// Indirect Offset support: (offset.type[+-/*]value)
+	IsIndirect    bool
+	PointerOffset int64
+	PointerType   string
+	PointerAdd    int64
+
 	Children []Rule
 }
 
@@ -35,8 +42,43 @@ func (r Rule) String() string {
 
 // Match checks if this rule matches the provided data.
 func (r *Rule) Match(data []byte) bool {
-	// 1. Bounds check
-	if r.Offset < 0 || r.Offset >= int64(len(data)) {
+	// 1. Resolve Offset (Handling Indirect Offsets)
+	actualOffset := r.Offset
+	if r.IsIndirect {
+		if r.PointerOffset < 0 || r.PointerOffset >= int64(len(data)) {
+			return false
+		}
+
+		var pointerVal int64
+		switch r.PointerType {
+		case "b": // byte
+			pointerVal = int64(data[r.PointerOffset])
+		case "s": // little-endian short
+			if r.PointerOffset+2 > int64(len(data)) {
+				return false
+			}
+			pointerVal = int64(binary.LittleEndian.Uint16(data[r.PointerOffset : r.PointerOffset+2]))
+		case "S": // big-endian short
+			if r.PointerOffset+2 > int64(len(data)) {
+				return false
+			}
+			pointerVal = int64(binary.BigEndian.Uint16(data[r.PointerOffset : r.PointerOffset+2]))
+		case "l": // little-endian long
+			if r.PointerOffset+4 > int64(len(data)) {
+				return false
+			}
+			pointerVal = int64(binary.LittleEndian.Uint32(data[r.PointerOffset : r.PointerOffset+4]))
+		case "L": // big-endian long
+			if r.PointerOffset+4 > int64(len(data)) {
+				return false
+			}
+			pointerVal = int64(binary.BigEndian.Uint32(data[r.PointerOffset : r.PointerOffset+4]))
+		}
+		actualOffset = pointerVal + r.PointerAdd
+	}
+
+	// 2. Bounds check
+	if actualOffset < 0 || actualOffset >= int64(len(data)) {
 		return false
 	}
 
@@ -45,13 +87,13 @@ func (r *Rule) Match(data []byte) bool {
 		return true
 	}
 
-	// 2. Handle Strings (Strings don't usually use numeric operators)
+	// 3. Handle Strings
 	if r.Type == "string" {
 		valStr, ok := r.Value.(string)
 		if !ok {
 			return false
 		}
-		return bytes.HasPrefix(data[r.Offset:], []byte(valStr))
+		return bytes.HasPrefix(data[actualOffset:], []byte(valStr))
 	}
 
 	// 3. Handle Numeric Types
@@ -60,27 +102,27 @@ func (r *Rule) Match(data []byte) bool {
 
 	switch r.Type {
 	case "belong", "ubelong", "uint32", "long": // Big Endian 4 bytes
-		if r.Offset+4 > int64(len(data)) {
+		if actualOffset+4 > int64(len(data)) {
 			return false
 		}
-		actual = uint64(binary.BigEndian.Uint32(data[r.Offset : r.Offset+4]))
+		actual = uint64(binary.BigEndian.Uint32(data[actualOffset : actualOffset+4]))
 	case "lelong", "ulelong": // Little Endian 4 bytes
-		if r.Offset+4 > int64(len(data)) {
+		if actualOffset+4 > int64(len(data)) {
 			return false
 		}
-		actual = uint64(binary.LittleEndian.Uint32(data[r.Offset : r.Offset+4]))
+		actual = uint64(binary.LittleEndian.Uint32(data[actualOffset : actualOffset+4]))
 	case "short", "beshort", "ubeshort": // Big Endian 2 bytes
-		if r.Offset+2 > int64(len(data)) {
+		if actualOffset+2 > int64(len(data)) {
 			return false
 		}
-		actual = uint64(binary.BigEndian.Uint16(data[r.Offset : r.Offset+2]))
+		actual = uint64(binary.BigEndian.Uint16(data[actualOffset : actualOffset+2]))
 	case "leshort", "uleshort", "uint16": // Little Endian 2 bytes
-		if r.Offset+2 > int64(len(data)) {
+		if actualOffset+2 > int64(len(data)) {
 			return false
 		}
-		actual = uint64(binary.LittleEndian.Uint16(data[r.Offset : r.Offset+2]))
+		actual = uint64(binary.LittleEndian.Uint16(data[actualOffset : actualOffset+2]))
 	case "byte", "ubyte": // 1 byte
-		actual = uint64(data[r.Offset])
+		actual = uint64(data[actualOffset])
 	default:
 		// Unknown type
 		return false

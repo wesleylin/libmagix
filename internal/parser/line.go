@@ -28,9 +28,9 @@ func ParseLine(line string) (*Rule, error) {
 		offsetPart = offsetPart[1:]
 	}
 
-	offset, err := strconv.ParseInt(offsetPart, 10, 64)
+	offset, isIndirect, ptrOff, ptrType, ptrAdd, err := parseOffset(offsetPart)
 	if err != nil {
-		return nil, fmt.Errorf("invalid offset: %v", err)
+		return nil, err
 	}
 
 	rawType := parts[1]
@@ -72,7 +72,83 @@ func ParseLine(line string) (*Rule, error) {
 		ValueRaw: valueRaw,
 		Message:  parts[3],
 		MatchAny: matchAny,
+
+		IsIndirect:    isIndirect,
+		PointerOffset: ptrOff,
+		PointerType:   ptrType,
+		PointerAdd:    ptrAdd,
 	}, nil
+}
+
+func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrType string, ptrAdd int64, err error) {
+	start := strings.Index(raw, "(")
+	end := strings.LastIndex(raw, ")")
+
+	if start == -1 || end == -1 || end < start {
+		offset, err = strconv.ParseInt(raw, 0, 64)
+		if err != nil {
+			err = fmt.Errorf("invalid offset: %v", err)
+		}
+		return
+	}
+
+	isIndirect = true
+	inner := raw[start+1 : end]
+	adjPart := raw[end+1:]
+
+	// 1. Handle inner (offset.type[+adj])
+	// Example: 0x3c.l or 0x3c.l+4
+	parts := strings.SplitN(inner, ".", 2)
+	if len(parts) < 2 {
+		err = fmt.Errorf("invalid indirect offset inner part: %s", inner)
+		return
+	}
+
+	ptrOff, err = strconv.ParseInt(parts[0], 0, 64)
+	if err != nil {
+		err = fmt.Errorf("invalid pointer offset: %v", err)
+		return
+	}
+
+	typeAndInnerAdd := parts[1]
+	if len(typeAndInnerAdd) == 0 {
+		err = fmt.Errorf("missing pointer type in: %s", raw)
+		return
+	}
+	ptrType = string(typeAndInnerAdd[0])
+
+	if len(typeAndInnerAdd) > 1 {
+		innerAdj := typeAndInnerAdd[1:]
+		ptrAdd, err = strconv.ParseInt(innerAdj, 0, 64)
+		if err != nil {
+			err = fmt.Errorf("invalid inner pointer adjustment: %v", err)
+			return
+		}
+	}
+
+	// 2. Handle adjustment outside parens (e.g. (0x3c.l)+4)
+	if adjPart != "" {
+		outerAdj, err2 := strconv.ParseInt(adjPart, 0, 64)
+		if err2 != nil {
+			err = fmt.Errorf("invalid outer pointer adjustment: %v", err2)
+			return
+		}
+		ptrAdd += outerAdj
+	}
+
+	// 3. Handle base offset (if any before parenthesis)
+	if start > 0 {
+		basePart := raw[:start]
+		// In some magic files, it might be ">base(ptr)"
+		// but usually 'base' is already stripped by the level handler ('>').
+		// If anything is left, we treat it as an addition to the offset.
+		baseOff, err3 := strconv.ParseInt(basePart, 0, 64)
+		if err3 == nil {
+			offset = baseOff
+		}
+	}
+
+	return
 }
 
 func parseTypeValue(typeStr string, valueStr string) (any, error) {
