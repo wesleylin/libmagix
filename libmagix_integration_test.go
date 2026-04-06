@@ -103,3 +103,54 @@ func TestHighVersionIdentification(t *testing.T) {
 		t.Errorf("Expected nil match for value 10, got %q", gotNoMatch.Message)
 	}
 }
+
+func TestELFIdentification(t *testing.T) {
+	// 1. Initialize engine
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/elf", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	// 2. Load the actual ELF bytes from testdata
+	elfData, err := os.ReadFile("testdata/sample.elf")
+	if err != nil {
+		t.Fatalf("Failed to read test ELF: %v", err)
+	}
+
+	// 3. Identify
+	got := engine.Identify(elfData)
+	want := "64-bit ELF executable"
+
+	if got == nil {
+		t.Fatal("Expected identification, got nil")
+	}
+	if got.Message != want {
+		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}
+
+func TestELFFromFileIdentification(t *testing.T) {
+	// 1. Initialize engine
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/elf", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	elfData, err := os.ReadFile("testdata/sample.gif")
+	if err != nil {
+		t.Fatalf("Failed to read test ELF: %v", err)
+	}
+
+	// 3. Identify
+	got := engine.Identify(elfData)
+	want := "64-bit ELF executable"
+
+	if got == nil {
+		t.Fatal("Expected identification, got nil")
+	}
+	if got.Message != want {
+		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}
