@@ -1,0 +1,4 @@
+0	string		#!/bin/bash	bash shell script
+0	string		#!/bin/sh	POSIX shell script
+0	string		#!/usr/bin/python	Python script
+0	string		#!/usr/bin/env\ python	Python script

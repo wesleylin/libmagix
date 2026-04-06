@@ -59,7 +59,7 @@ magic files come from https://github.com/file/file/tree/master/magic/Magdir
 
 ## Supported Features
 
-The engine is generic and follows the `libmagic` specification. While it can theoretically parse any rule, it currently has only been tested for PDFs, ELF binaries, and BMP images.
+The engine is generic and follows the `libmagic` specification. While it can theoretically parse any rule, it currently has only been tested for PDFs, ELF binaries, BMP images, and Shell scripts.
 
 ## Supported Types
 

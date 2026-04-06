@@ -182,3 +182,32 @@ func TestBMPIdentificationSample(t *testing.T) {
 		t.Errorf("Got %q, want %q", got.Message, want)
 	}
 }
+
+func TestScriptIdentification(t *testing.T) {
+	// 1. Initialize engine
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/script", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	// 2. Test sh
+	shData, err := os.ReadFile("testdata/sample.sh")
+	if err != nil {
+		t.Fatalf("Failed to read sh sample: %v", err)
+	}
+	got := engine.Identify(shData)
+	if got == nil || got.Message != "POSIX shell script" {
+		t.Errorf("Identify(sh) = %v, want POSIX shell script", got)
+	}
+
+	// 3. Test bash
+	bashData, err := os.ReadFile("testdata/sample.bash")
+	if err != nil {
+		t.Fatalf("Failed to read bash sample: %v", err)
+	}
+	got = engine.Identify(bashData)
+	if got == nil || got.Message != "bash shell script" {
+		t.Errorf("Identify(bash) = %v, want bash shell script", got)
+	}
+}
