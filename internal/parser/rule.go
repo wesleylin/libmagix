@@ -19,6 +19,7 @@ type Rule struct {
 	ValueRaw []byte
 	Message  string
 	Mime     string
+	MatchAny bool // Support for 'x' value in magic files
 	Children []Rule
 }
 
@@ -39,6 +40,11 @@ func (r *Rule) Match(data []byte) bool {
 		return false
 	}
 
+	// 1.1 MatchAny 'x' (always matches if within bounds)
+	if r.MatchAny {
+		return true
+	}
+
 	// 2. Handle Strings (Strings don't usually use numeric operators)
 	if r.Type == "string" {
 		valStr, ok := r.Value.(string)
@@ -53,27 +59,27 @@ func (r *Rule) Match(data []byte) bool {
 	var actual uint64
 
 	switch r.Type {
-	case "belong": // Big Endian 4 bytes
+	case "belong", "ubelong", "uint32", "long": // Big Endian 4 bytes
 		if r.Offset+4 > int64(len(data)) {
 			return false
 		}
 		actual = uint64(binary.BigEndian.Uint32(data[r.Offset : r.Offset+4]))
-	case "lelong": // Little Endian 4 bytes
+	case "lelong", "ulelong": // Little Endian 4 bytes
 		if r.Offset+4 > int64(len(data)) {
 			return false
 		}
 		actual = uint64(binary.LittleEndian.Uint32(data[r.Offset : r.Offset+4]))
-	case "short", "beshort": // Big Endian 2 bytes
+	case "short", "beshort", "ubeshort": // Big Endian 2 bytes
 		if r.Offset+2 > int64(len(data)) {
 			return false
 		}
 		actual = uint64(binary.BigEndian.Uint16(data[r.Offset : r.Offset+2]))
-	case "leshort": // Little Endian 2 bytes
+	case "leshort", "uleshort", "uint16": // Little Endian 2 bytes
 		if r.Offset+2 > int64(len(data)) {
 			return false
 		}
 		actual = uint64(binary.LittleEndian.Uint16(data[r.Offset : r.Offset+2]))
-	case "byte": // 1 byte
+	case "byte", "ubyte": // 1 byte
 		actual = uint64(data[r.Offset])
 	default:
 		// Unknown type

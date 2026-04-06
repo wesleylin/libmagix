@@ -1,6 +1,7 @@
 package libmagix_test
 
 import (
+	"encoding/binary"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -121,6 +122,58 @@ func TestELFIdentification(t *testing.T) {
 	// 3. Identify
 	got := engine.Identify(elfData)
 	want := "64-bit ELF executable"
+
+	if got == nil {
+		t.Fatal("Expected identification, got nil")
+	}
+	if got.Message != want {
+		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}
+
+func TestBMPIdentificationTemp(t *testing.T) {
+	// 1. Initialize engine
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/bmp", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	// 2. Create fake BMP Windows 3.x header data
+	// Offset 0: BM
+	// Offset 14: 40 (lelong)
+	bmpData := make([]byte, 54)
+	copy(bmpData[0:2], "BM")
+	binary.LittleEndian.PutUint32(bmpData[14:18], 40)
+
+	// 3. Identify
+	got := engine.Identify(bmpData)
+	want := "Windows 3.x format"
+
+	if got == nil {
+		t.Fatal("Expected identification, got nil")
+	}
+	if got.Message != want {
+		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}
+
+func TestBMPIdentificationSample(t *testing.T) {
+	// 1. Initialize engine
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/bmp", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	bmpData, err := os.ReadFile("testdata/blackbuck.bmp")
+	if err != nil {
+		t.Fatalf("Failed to read test BMP: %v", err)
+	}
+
+	// 3. Identify
+	got := engine.Identify(bmpData)
+	want := "Windows 3.x format"
 
 	if got == nil {
 		t.Fatal("Expected identification, got nil")

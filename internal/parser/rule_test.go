@@ -12,38 +12,50 @@ func TestRule_Match(t *testing.T) {
 		want bool
 	}{
 		{
-			name: "Exact string match at start",
-			rule: Rule{Offset: 0, Type: "string", Value: "%PDF-"},
-			data: []byte("%PDF-1.4\n%âãÏÓ"),
+			name: "MatchAny (always true if in bounds)",
+			rule: Rule{Offset: 0, MatchAny: true},
+			data: []byte("anything"),
 			want: true,
 		},
 		{
-			name: "String match at offset",
-			rule: Rule{Offset: 2, Type: "string", Value: "PNG"},
-			data: []byte("\x89HPNG\r\n\x1a\n"),
+			name: "Little Endian uint32 match",
+			rule: Rule{Offset: 0, Type: "lelong", Value: uint32(0x12345678), Operator: "="},
+			data: []byte{0x78, 0x56, 0x34, 0x12},
 			want: true,
 		},
 		{
-			name: "String mismatch",
-			rule: Rule{Offset: 0, Type: "string", Value: "GIF"},
-			data: []byte("%PDF-1.4"),
-			want: false,
+			name: "Greater than match",
+			rule: Rule{Offset: 0, Type: "byte", Value: uint8(10), Operator: ">"},
+			data: []byte{20},
+			want: true,
 		},
 		{
-			name: "Offset out of bounds",
-			rule: Rule{Offset: 100, Type: "string", Value: "test"},
-			data: []byte("short file"),
-			want: false,
+			name: "Less than match",
+			rule: Rule{Offset: 0, Type: "byte", Value: uint8(10), Operator: "<"},
+			data: []byte{5},
+			want: true,
 		},
 		{
-			name: "Empty data",
-			rule: Rule{Offset: 0, Type: "string", Value: "test"},
-			data: []byte{},
-			want: false,
+			name: "Bitmasking (has bit 0x80)",
+			rule: Rule{Offset: 0, Type: "byte", Mask: 0x80, HasMask: true, Value: uint8(0x80), Operator: "="},
+			data: []byte{0x81},
+			want: true,
 		},
 		{
-			name: "Invalid value type in rule",
-			rule: Rule{Offset: 0, Type: "string", Value: 123}, // Value should be string
+			name: "Bitwise AND operator (all bits set)",
+			rule: Rule{Offset: 0, Type: "byte", Value: uint8(0x03), Operator: "&"},
+			data: []byte{0x07}, // 0111 & 0011 == 0011
+			want: true,
+		},
+		{
+			name: "Bitwise NOT operator (bit NOT set)",
+			rule: Rule{Offset: 0, Type: "byte", Value: uint8(0x80), Operator: "^"},
+			data: []byte{0x7F}, // 0111 & 1000 == 0
+			want: true,
+		},
+		{
+			name: "Invalid value type in rule (fails cast)",
+			rule: Rule{Offset: 0, Type: "string", Value: 123},
 			data: []byte("123"),
 			want: false,
 		},

@@ -43,9 +43,16 @@ func ParseLine(line string) (*Rule, error) {
 	}
 	op, cleanValueStr := parseOperator(rawValue)
 
-	parsedValue, err := parseTypeValue(typeStr, cleanValueStr)
-	if err != nil {
-		return nil, err
+	matchAny := false
+	var parsedValue any
+	if cleanValueStr == "x" {
+		matchAny = true
+	} else {
+		var err error
+		parsedValue, err = parseTypeValue(typeStr, cleanValueStr)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Populate ValueRaw for string types (useful for debugging or legacy string matching)
@@ -64,6 +71,7 @@ func ParseLine(line string) (*Rule, error) {
 		Value:    parsedValue,
 		ValueRaw: valueRaw,
 		Message:  parts[3],
+		MatchAny: matchAny,
 	}, nil
 }
 
@@ -91,7 +99,7 @@ func parseTypeValue(typeStr string, valueStr string) (any, error) {
 		// Return as string for the 'Value' field
 		return string(processedValue), nil
 
-	case "belong", "lelong":
+	case "belong", "lelong", "ubelong", "ulelong", "uint32", "long":
 		// ParseUint with base 0 automatically handles "0x1234" (Hex), "0123" (Octal), and "123" (Decimal)
 		val, err := strconv.ParseUint(valueStr, 0, 32)
 		if err != nil {
@@ -99,14 +107,14 @@ func parseTypeValue(typeStr string, valueStr string) (any, error) {
 		}
 		return uint32(val), nil
 
-	case "short", "beshort", "leshort":
+	case "short", "beshort", "leshort", "ubeshort", "uleshort", "uint16":
 		val, err := strconv.ParseUint(valueStr, 0, 16)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
 		}
 		return uint16(val), nil
 
-	case "byte":
+	case "byte", "ubyte":
 		val, err := strconv.ParseUint(valueStr, 0, 8)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
