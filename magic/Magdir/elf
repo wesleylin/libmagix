@@ -1,5 +1,5 @@
-0	string	\x7fELF	ELF binary
->4	byte	1	32-bit ELF binary
->4	byte	2	64-bit ELF binary
->>16	leshort	2	64-bit ELF executable
->>16	leshort	3	64-bit ELF shared object
+0	string	\x7fELF	ELF
+>4	byte	1	32-bit
+>4	byte	2	64-bit
+>>16	leshort	2	executable
+>>16	leshort	3	shared object

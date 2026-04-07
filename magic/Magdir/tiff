@@ -1,0 +1,4 @@
+0	string		II	TIFF image data, little-endian
+>2	leshort		42	\b
+0	string		MM	TIFF image data, big-endian
+>2	beshort		42	\b

@@ -7,7 +7,7 @@ import (
 	"github.com/wesleylin/libmagix/internal/parser"
 )
 
-func TestMatchTree(t *testing.T) {
+func TestMatchPath(t *testing.T) {
 	// 1. Manually construct a rule tree for testing
 	// Level 0: ZIP archive
 	//   Level 1: DOCX (specifically looks for 'word/' inside the zip structure)
@@ -78,21 +78,23 @@ func TestMatchTree(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := libmagix.MatchTree(tt.data, rules)
+			path := libmagix.MatchPath(tt.data, rules)
 
 			if tt.expectedMsg == "" {
-				if got != nil {
-					t.Errorf("Expected nil match, got %v", got.Message)
+				if len(path) > 0 {
+					t.Errorf("Expected nil match, got %v", path[len(path)-1].Message)
 				}
 				return
 			}
 
-			if got == nil {
+			if len(path) == 0 {
 				t.Fatalf("Expected match %q, got nil", tt.expectedMsg)
 			}
 
+			// For this test, we check the deepest child to preserve original test intent
+			got := path[len(path)-1]
 			if got.Message != tt.expectedMsg {
-				t.Errorf("MatchTree() Message = %v, want %v", got.Message, tt.expectedMsg)
+				t.Errorf("MatchPath() deepest Message = %v, want %v", got.Message, tt.expectedMsg)
 			}
 		})
 	}

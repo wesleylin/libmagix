@@ -1,4 +1,4 @@
 0	string		MZ	MS-DOS executable
->(0x3c.l)	string	PE\x00\x00	PE executable
->>(0x3c.l)+4	leshort	0x014c	Intel 80386
->>(0x3c.l)+4	leshort	0x8664	x86-64
+>(0x3c.l)	string	PE\x00\x00	\b, PE executable
+>>(0x3c.l)+4	leshort	0x014c	\b, Intel 80386
+>>(0x3c.l)+4	leshort	0x8664	\b, x86-64

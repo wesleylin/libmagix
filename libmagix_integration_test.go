@@ -121,7 +121,7 @@ func TestELFIdentification(t *testing.T) {
 
 	// 3. Identify
 	got := engine.Identify(elfData)
-	want := "64-bit ELF executable"
+	want := "ELF 64-bit executable"
 
 	if got == nil {
 		t.Fatal("Expected identification, got nil")
@@ -148,7 +148,7 @@ func TestBMPIdentificationTemp(t *testing.T) {
 
 	// 3. Identify
 	got := engine.Identify(bmpData)
-	want := "Windows 3.x format"
+	want := "PC bitmap Windows 3.x format"
 
 	if got == nil {
 		t.Fatal("Expected identification, got nil")
@@ -173,7 +173,7 @@ func TestBMPIdentificationSample(t *testing.T) {
 
 	// 3. Identify
 	got := engine.Identify(bmpData)
-	want := "Windows 3.x format"
+	want := "PC bitmap Windows 3.x format"
 
 	if got == nil {
 		t.Fatal("Expected identification, got nil")
@@ -233,7 +233,56 @@ func TestPEIdentification(t *testing.T) {
 
 	// 3. Identify
 	got := engine.Identify(peData)
-	want := "x86-64" // Deepest match in our simplified PE magic
+	want := "MS-DOS executable, PE executable, x86-64"
+
+	if got == nil {
+		t.Fatal("Expected identification, got nil")
+	}
+	if got.Message != want {
+		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}
+
+func TestTIFFIdentificationMock(t *testing.T) {
+	// 1. Initialize engine
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/tiff", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	// 2. Test II (Little Endian)
+	iiData := []byte{0x49, 0x49, 0x2A, 0x00}
+	got := engine.Identify(iiData)
+	if got == nil || got.Message != "TIFF image data, little-endian" {
+		t.Errorf("Identify(II) = %v, want TIFF image data, little-endian", got)
+	}
+
+	// 3. Test MM (Big Endian)
+	mmData := []byte{0x4D, 0x4D, 0x00, 0x2A}
+	got = engine.Identify(mmData)
+	if got == nil || got.Message != "TIFF image data, big-endian" {
+		t.Errorf("Identify(MM) = %v, want TIFF image data, big-endian", got)
+	}
+}
+
+func TestTIFFIdentificationSample(t *testing.T) {
+	// 1. Initialize engine
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/tiff", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	// 2. Load the actual TIFF bytes from testdata
+	tiffData, err := os.ReadFile("testdata/sample.tif")
+	if err != nil {
+		t.Fatalf("Failed to read test TIFF: %v", err)
+	}
+
+	// 3. Identify
+	got := engine.Identify(tiffData)
+	want := "TIFF image data, big-endian"
 
 	if got == nil {
 		t.Fatal("Expected identification, got nil")

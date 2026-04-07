@@ -3,6 +3,7 @@ package libmagix
 import (
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/wesleylin/libmagix/internal/parser"
 )
@@ -10,6 +11,16 @@ import (
 type Magix struct {
 	rules  []parser.Rule
 	logger *slog.Logger
+}
+
+// Result represents the outcome of an identification.
+type Result struct {
+	Message string
+	Mime    string
+}
+
+func (r *Result) String() string {
+	return r.Message
 }
 
 // New loads all magic files from the specified directory.
@@ -39,29 +50,59 @@ func New(magicPath string, logger *slog.Logger) (*Magix, error) {
 	return &Magix{rules: rules, logger: logger}, nil
 }
 
-// Identify takes file bytes and returns the match.
-func (m *Magix) Identify(data []byte) *parser.Rule {
-	return MatchTree(data, m.rules)
+// Identify takes file bytes and returns a Result containing the full, concatenated description.
+func (m *Magix) Identify(data []byte) *Result {
+	for i := range m.rules {
+		if m.rules[i].Match(data) {
+			var fullMsg strings.Builder
+			var lastMime string
+
+			m.identifyRecursive(data, &m.rules[i], &fullMsg, &lastMime)
+
+			return &Result{
+				Message: fullMsg.String(),
+				Mime:    lastMime,
+			}
+		}
+	}
+	return nil
 }
 
-// MatchTree recursively walks the rule tree.
-// It returns the most specific (deepest) match found.
-func MatchTree(data []byte, rules []parser.Rule) *parser.Rule {
+func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, fullMsg *strings.Builder, lastMime *string) {
+	msg := r.Message
+	if r.Mime != "" {
+		*lastMime = r.Mime
+	}
 
-	for i := range rules {
-		// todo check if using Match works better than MatchByte
-		if rules[i].Match(data) {
-			// if any children match, prefer them.
-			// Children are more specific (e.g., "Zip" -> "DocX").
-			childMatch := MatchTree(data, rules[i].Children)
-			if childMatch != nil {
-				return childMatch
+	if msg != "" {
+		// Handle backspace \b
+		if strings.HasPrefix(msg, "\\b") {
+			fullMsg.WriteString(msg[2:])
+		} else {
+			if fullMsg.Len() > 0 {
+				fullMsg.WriteString(" ")
 			}
-
-			// If no children match, this parent is the best we've got.
-			return &rules[i]
+			fullMsg.WriteString(msg)
 		}
 	}
 
+	// Try all children. In libmagic, multiple children at the same level can match.
+	for i := range r.Children {
+		if r.Children[i].Match(data) {
+			m.identifyRecursive(data, &r.Children[i], fullMsg, lastMime)
+		}
+	}
+}
+
+// MatchPath recursively walks the rule tree.
+// It returns the slice of all matching rules from the root to the leaf.
+// Note: This only returns the FIRST matching path, which is useful for debugging/tests.
+func MatchPath(data []byte, rules []parser.Rule) []*parser.Rule {
+	for i := range rules {
+		if rules[i].Match(data) {
+			childPath := MatchPath(data, rules[i].Children)
+			return append([]*parser.Rule{&rules[i]}, childPath...)
+		}
+	}
 	return nil
 }
