@@ -332,3 +332,27 @@ func TestOOXMLIdentificationMock(t *testing.T) {
 		t.Errorf("Identify() = %v, want %q", got, want)
 	}
 }
+
+func TestSubroutineIdentification(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/subroutines", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	tests := []struct {
+		data     []byte
+		expected string
+	}{
+		{[]byte("MAGIChello"), "Magic file found, they said hello"},
+		{[]byte("MAGICbye"), "Magic file found, they said goodbye"},
+		{[]byte("MAGICnothing"), "Magic file found"},
+	}
+
+	for _, tt := range tests {
+		got := engine.Identify(tt.data)
+		if got == nil || got.Message != tt.expected {
+			t.Errorf("Identify(%q) = %v, want %q", tt.data, got, tt.expected)
+		}
+	}
+}

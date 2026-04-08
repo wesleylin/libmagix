@@ -1,0 +1,6 @@
+0	name	greet
+>0	string	hello	\b, they said hello
+>0	string	bye	\b, they said goodbye
+
+0	string	MAGIC	Magic file found
+>5	use	greet

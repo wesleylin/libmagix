@@ -9,8 +9,9 @@ import (
 )
 
 type Magix struct {
-	rules  []parser.Rule
-	logger *slog.Logger
+	rules      []parser.Rule
+	namedRules map[string]*parser.Rule
+	logger     *slog.Logger
 }
 
 // Result represents the outcome of an identification.
@@ -36,31 +37,46 @@ func New(magicPath string, logger *slog.Logger) (*Magix, error) {
 		return nil, err
 	}
 
-	var rules []parser.Rule
+	var rawRules []parser.Rule
 	if info.IsDir() {
-		rules, err = p.LoadDirectory(magicPath)
+		rawRules, err = p.LoadDirectory(magicPath)
 	} else {
-		rules, err = p.LoadFile(magicPath)
+		rawRules, err = p.LoadFile(magicPath)
 	}
 
 	if err != nil {
 		return nil, err
 	}
-	logger.Debug("Loaded", slog.Int("rules", len(rules)), slog.String("root rules from", magicPath))
-	return &Magix{rules: rules, logger: logger}, nil
+
+	// Separate named rules from main rules
+	mainRules := []parser.Rule{}
+	namedRules := make(map[string]*parser.Rule)
+	for i := range rawRules {
+		if rawRules[i].Type == "name" {
+			name, ok := rawRules[i].Value.(string)
+			if ok {
+				namedRules[name] = &rawRules[i]
+			}
+		} else {
+			mainRules = append(mainRules, rawRules[i])
+		}
+	}
+
+	logger.Debug("Loaded", slog.Int("rules", len(mainRules)), slog.Int("named_blocks", len(namedRules)), slog.String("from", magicPath))
+	return &Magix{rules: mainRules, namedRules: namedRules, logger: logger}, nil
 }
 
 // Identify takes file bytes and returns a Result containing the full, concatenated description.
 func (m *Magix) Identify(data []byte) *Result {
 	for i := range m.rules {
-		if matched, matchedOffset := m.rules[i].Match(data, 0); matched {
+		if matched, matchedOffset := m.rules[i].Match(data, 0, false); matched {
 			var fullMsg strings.Builder
 			var lastMime string
 
 			m.identifyRecursive(data, &m.rules[i], matchedOffset, &fullMsg, &lastMime)
 
 			return &Result{
-				Message: fullMsg.String(),
+				Message: strings.TrimSpace(fullMsg.String()),
 				Mime:    lastMime,
 			}
 		}
@@ -69,6 +85,22 @@ func (m *Magix) Identify(data []byte) *Result {
 }
 
 func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset int64, fullMsg *strings.Builder, lastMime *string) {
+	if r.Type == "use" {
+		name, ok := r.Value.(string)
+		if ok {
+			if subRule, found := m.namedRules[name]; found {
+				// Execute all children of the named block using the current lastMatchOffset
+				// IMPORTANT: Rules inside a subroutine are forced to be relative to the 'use' offset
+				for i := range subRule.Children {
+					if matched, matchedOffset := subRule.Children[i].Match(data, lastMatchOffset, true); matched {
+						m.identifyRecursive(data, &subRule.Children[i], matchedOffset, fullMsg, lastMime)
+					}
+				}
+			}
+		}
+		return
+	}
+
 	msg := r.Message
 	if r.Mime != "" {
 		*lastMime = r.Mime
@@ -79,7 +111,7 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset i
 		if strings.HasPrefix(msg, "\\b") {
 			fullMsg.WriteString(msg[2:])
 		} else {
-			if fullMsg.Len() > 0 {
+			if fullMsg.Len() > 0 && !strings.HasSuffix(fullMsg.String(), " ") {
 				fullMsg.WriteString(" ")
 			}
 			fullMsg.WriteString(msg)
@@ -89,7 +121,7 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset i
 	// Try all children. In libmagic, multiple children at the same level can match.
 	for i := range r.Children {
 		// Relative rules (&) use the lastMatchOffset
-		if matched, matchedOffset := r.Children[i].Match(data, lastMatchOffset); matched {
+		if matched, matchedOffset := r.Children[i].Match(data, lastMatchOffset, false); matched {
 			m.identifyRecursive(data, &r.Children[i], matchedOffset, fullMsg, lastMime)
 		}
 	}
@@ -100,7 +132,7 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset i
 // Note: This only returns the FIRST matching path, which is useful for debugging/tests.
 func MatchPath(data []byte, rules []parser.Rule, baseOffset int64) []*parser.Rule {
 	for i := range rules {
-		if matched, matchedOffset := rules[i].Match(data, baseOffset); matched {
+		if matched, matchedOffset := rules[i].Match(data, baseOffset, false); matched {
 			childPath := MatchPath(data, rules[i].Children, matchedOffset)
 			return append([]*parser.Rule{&rules[i]}, childPath...)
 		}

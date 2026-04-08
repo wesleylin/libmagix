@@ -31,6 +31,7 @@ type Rule struct {
 	IsRelative  bool // Support for '&' relative offset
 
 	Children []Rule
+	RuleName string // For 'name' blocks
 }
 
 func (r Rule) String() string {
@@ -46,11 +47,21 @@ func (r Rule) String() string {
 // Match checks if this rule matches the provided data.
 // It takes a baseOffset (the match location of the parent rule) to support relative offsets.
 // It returns whether it matched and the absolute offset where the match occurred.
-func (r *Rule) Match(data []byte, baseOffset int64) (bool, int64) {
+func (r *Rule) Match(data []byte, baseOffset int64, forcedRelative bool) (bool, int64) {
 	// 1. Resolve the actual offset (handling relative and indirect offsets)
-	actualOffset, ok := r.resolveOffset(data, baseOffset)
+	actualOffset, ok := r.resolveOffset(data, baseOffset, forcedRelative)
 	if !ok {
 		return false, 0
+	}
+
+	// Handle Meta-types
+	if r.Type == "name" {
+		return false, 0 // Declarations don't match data
+	}
+	if r.Type == "use" {
+		// 'use' calls always "match" to trigger the jump,
+		// and they always use the current baseOffset.
+		return true, actualOffset
 	}
 
 	// 2. MatchAny 'x' (always matches if within bounds)
@@ -74,10 +85,10 @@ func (r *Rule) Match(data []byte, baseOffset int64) (bool, int64) {
 }
 
 // resolveOffset calculates the final absolute offset, handling relative (&) and indirect ((...)) syntax.
-func (r *Rule) resolveOffset(data []byte, baseOffset int64) (int64, bool) {
+func (r *Rule) resolveOffset(data []byte, baseOffset int64, forcedRelative bool) (int64, bool) {
 	// 0. Initial offset
 	absoluteOffset := r.Offset
-	if r.IsRelative {
+	if r.IsRelative || forcedRelative {
 		absoluteOffset += baseOffset
 	}
 
@@ -85,7 +96,7 @@ func (r *Rule) resolveOffset(data []byte, baseOffset int64) (int64, bool) {
 	actualOffset := absoluteOffset
 	if r.IsIndirect {
 		ptrOff := r.PointerOffset
-		if r.IsRelative {
+		if r.IsRelative || forcedRelative {
 			ptrOff += baseOffset
 		}
 

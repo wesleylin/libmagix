@@ -16,8 +16,8 @@ func ParseLine(line string) (*Rule, error) {
 	// We use a custom splitter or regex because 'strings.Fields'
 	// fails on escaped spaces (e.g., 'string  \ name\ with\ space')
 	parts := splitMagicLine(line)
-	if len(parts) < 4 {
-		return nil, fmt.Errorf("malformed line: %s", line)
+	if len(parts) < 3 {
+		return nil, fmt.Errorf("malformed line (need at least Offset, Type, Value): %s", line)
 	}
 
 	// Handle nesting level (count leading '>')
@@ -74,6 +74,11 @@ func ParseLine(line string) (*Rule, error) {
 		valueRaw = []byte(strVal)
 	}
 
+	message := ""
+	if len(parts) >= 4 {
+		message = parts[3]
+	}
+
 	return &Rule{
 		Level:    level,
 		Offset:   offset,
@@ -83,7 +88,7 @@ func ParseLine(line string) (*Rule, error) {
 		Operator: op,
 		Value:    parsedValue,
 		ValueRaw: valueRaw,
-		Message:  parts[3],
+		Message:  message,
 		MatchAny: matchAny,
 
 		IsIndirect:    isIndirect,
@@ -212,6 +217,9 @@ func parseTypeValue(typeStr string, valueStr string) (any, error) {
 			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
 		}
 		return uint8(val), nil
+
+	case "name", "use":
+		return valueStr, nil
 
 	default:
 		// Unknown types are treated as strings to prevent crashing on future/unknown types

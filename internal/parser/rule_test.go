@@ -75,7 +75,7 @@ func TestRule_Match(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got, _ := tt.rule.Match(tt.data, 0); got != tt.want {
+			if got, _ := tt.rule.Match(tt.data, 0, false); got != tt.want {
 				t.Errorf("Rule.Match() = %v, want %v", got, tt.want)
 			}
 		})
