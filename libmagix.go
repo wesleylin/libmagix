@@ -53,11 +53,11 @@ func New(magicPath string, logger *slog.Logger) (*Magix, error) {
 // Identify takes file bytes and returns a Result containing the full, concatenated description.
 func (m *Magix) Identify(data []byte) *Result {
 	for i := range m.rules {
-		if m.rules[i].Match(data) {
+		if matched, matchedOffset := m.rules[i].Match(data, 0); matched {
 			var fullMsg strings.Builder
 			var lastMime string
 
-			m.identifyRecursive(data, &m.rules[i], &fullMsg, &lastMime)
+			m.identifyRecursive(data, &m.rules[i], matchedOffset, &fullMsg, &lastMime)
 
 			return &Result{
 				Message: fullMsg.String(),
@@ -68,7 +68,7 @@ func (m *Magix) Identify(data []byte) *Result {
 	return nil
 }
 
-func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, fullMsg *strings.Builder, lastMime *string) {
+func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset int64, fullMsg *strings.Builder, lastMime *string) {
 	msg := r.Message
 	if r.Mime != "" {
 		*lastMime = r.Mime
@@ -88,8 +88,9 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, fullMsg *strings.
 
 	// Try all children. In libmagic, multiple children at the same level can match.
 	for i := range r.Children {
-		if r.Children[i].Match(data) {
-			m.identifyRecursive(data, &r.Children[i], fullMsg, lastMime)
+		// Relative rules (&) use the lastMatchOffset
+		if matched, matchedOffset := r.Children[i].Match(data, lastMatchOffset); matched {
+			m.identifyRecursive(data, &r.Children[i], matchedOffset, fullMsg, lastMime)
 		}
 	}
 }
@@ -97,10 +98,10 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, fullMsg *strings.
 // MatchPath recursively walks the rule tree.
 // It returns the slice of all matching rules from the root to the leaf.
 // Note: This only returns the FIRST matching path, which is useful for debugging/tests.
-func MatchPath(data []byte, rules []parser.Rule) []*parser.Rule {
+func MatchPath(data []byte, rules []parser.Rule, baseOffset int64) []*parser.Rule {
 	for i := range rules {
-		if rules[i].Match(data) {
-			childPath := MatchPath(data, rules[i].Children)
+		if matched, matchedOffset := rules[i].Match(data, baseOffset); matched {
+			childPath := MatchPath(data, rules[i].Children, matchedOffset)
 			return append([]*parser.Rule{&rules[i]}, childPath...)
 		}
 	}

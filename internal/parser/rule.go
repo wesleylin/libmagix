@@ -27,6 +27,9 @@ type Rule struct {
 	PointerType   string
 	PointerAdd    int64
 
+	SearchRange int64
+	IsRelative  bool // Support for '&' relative offset
+
 	Children []Rule
 }
 
@@ -41,104 +44,139 @@ func (r Rule) String() string {
 }
 
 // Match checks if this rule matches the provided data.
-func (r *Rule) Match(data []byte) bool {
+// It takes a baseOffset (the match location of the parent rule) to support relative offsets.
+// It returns whether it matched and the absolute offset where the match occurred.
+func (r *Rule) Match(data []byte, baseOffset int64) (bool, int64) {
+	// 0. Handle Relative Offset
+	absoluteOffset := r.Offset
+	if r.IsRelative {
+		absoluteOffset += baseOffset
+	}
+
 	// 1. Resolve Offset (Handling Indirect Offsets)
-	actualOffset := r.Offset
+	actualOffset := absoluteOffset
 	if r.IsIndirect {
-		if r.PointerOffset < 0 || r.PointerOffset >= int64(len(data)) {
-			return false
+		// Indirect offsets themselves can be relative: (&0.l)
+		ptrOff := r.PointerOffset
+		if r.IsRelative {
+			ptrOff += baseOffset
+		}
+
+		if ptrOff < 0 || ptrOff >= int64(len(data)) {
+			return false, 0
 		}
 
 		var pointerVal int64
 		switch r.PointerType {
 		case "b": // byte
-			pointerVal = int64(data[r.PointerOffset])
+			pointerVal = int64(data[ptrOff])
 		case "s": // little-endian short
-			if r.PointerOffset+2 > int64(len(data)) {
-				return false
+			if ptrOff+2 > int64(len(data)) {
+				return false, 0
 			}
-			pointerVal = int64(binary.LittleEndian.Uint16(data[r.PointerOffset : r.PointerOffset+2]))
+			pointerVal = int64(binary.LittleEndian.Uint16(data[ptrOff : ptrOff+2]))
 		case "S": // big-endian short
-			if r.PointerOffset+2 > int64(len(data)) {
-				return false
+			if ptrOff+2 > int64(len(data)) {
+				return false, 0
 			}
-			pointerVal = int64(binary.BigEndian.Uint16(data[r.PointerOffset : r.PointerOffset+2]))
+			pointerVal = int64(binary.BigEndian.Uint16(data[ptrOff : ptrOff+2]))
 		case "l": // little-endian long
-			if r.PointerOffset+4 > int64(len(data)) {
-				return false
+			if ptrOff+4 > int64(len(data)) {
+				return false, 0
 			}
-			pointerVal = int64(binary.LittleEndian.Uint32(data[r.PointerOffset : r.PointerOffset+4]))
+			pointerVal = int64(binary.LittleEndian.Uint32(data[ptrOff : ptrOff+4]))
 		case "L": // big-endian long
-			if r.PointerOffset+4 > int64(len(data)) {
-				return false
+			if ptrOff+4 > int64(len(data)) {
+				return false, 0
 			}
-			pointerVal = int64(binary.BigEndian.Uint32(data[r.PointerOffset : r.PointerOffset+4]))
+			pointerVal = int64(binary.BigEndian.Uint32(data[ptrOff : ptrOff+4]))
 		}
 		actualOffset = pointerVal + r.PointerAdd
 	}
 
-	// 2. Bounds check
+	// 2. Handle Search Type
+	if r.Type == "search" {
+		valStr, ok := r.Value.(string)
+		if !ok {
+			return false, 0
+		}
+		pattern := []byte(valStr)
+		if actualOffset < 0 || actualOffset >= int64(len(data)) {
+			return false, 0
+		}
+
+		searchEnd := actualOffset + r.SearchRange
+		if searchEnd > int64(len(data)) {
+			searchEnd = int64(len(data))
+		}
+
+		idx := bytes.Index(data[actualOffset:searchEnd], pattern)
+		if idx == -1 {
+			return false, 0
+		}
+		return true, actualOffset + int64(idx)
+	}
+
+	// 3. Bounds check
 	if actualOffset < 0 || actualOffset >= int64(len(data)) {
-		return false
+		return false, 0
 	}
 
 	// 1.1 MatchAny 'x' (always matches if within bounds)
 	if r.MatchAny {
-		return true
+		return true, actualOffset
 	}
 
-	// 3. Handle Strings
+	// 4. Handle Strings
 	if r.Type == "string" {
 		valStr, ok := r.Value.(string)
 		if !ok {
-			return false
+			return false, 0
 		}
-		return bytes.HasPrefix(data[actualOffset:], []byte(valStr))
+		if bytes.HasPrefix(data[actualOffset:], []byte(valStr)) {
+			return true, actualOffset
+		}
+		return false, 0
 	}
 
-	// 3. Handle Numeric Types
-	// We read the bytes and convert everything to uint64 for easy comparison
+	// 5. Handle Numeric Types
 	var actual uint64
-
 	switch r.Type {
 	case "belong", "ubelong", "uint32", "long": // Big Endian 4 bytes
 		if actualOffset+4 > int64(len(data)) {
-			return false
+			return false, 0
 		}
 		actual = uint64(binary.BigEndian.Uint32(data[actualOffset : actualOffset+4]))
 	case "lelong", "ulelong": // Little Endian 4 bytes
 		if actualOffset+4 > int64(len(data)) {
-			return false
+			return false, 0
 		}
 		actual = uint64(binary.LittleEndian.Uint32(data[actualOffset : actualOffset+4]))
 	case "short", "beshort", "ubeshort": // Big Endian 2 bytes
 		if actualOffset+2 > int64(len(data)) {
-			return false
+			return false, 0
 		}
 		actual = uint64(binary.BigEndian.Uint16(data[actualOffset : actualOffset+2]))
 	case "leshort", "uleshort", "uint16": // Little Endian 2 bytes
 		if actualOffset+2 > int64(len(data)) {
-			return false
+			return false, 0
 		}
 		actual = uint64(binary.LittleEndian.Uint16(data[actualOffset : actualOffset+2]))
 	case "byte", "ubyte": // 1 byte
 		actual = uint64(data[actualOffset])
 	default:
-		// Unknown type
-		return false
+		return false, 0
 	}
 
-	// 4. Apply Mask (if exists)
-	// Example: >4 byte&0x80
 	if r.HasMask {
 		actual = actual & r.Mask
 	}
 
-	// 5. Compare using the Operator
-	// We must cast the expected Value (which is 'any') to uint64 safely
 	expected := castToUint64(r.Value)
-
-	return compare(actual, expected, r.Operator)
+	if compare(actual, expected, r.Operator) {
+		return true, actualOffset
+	}
+	return false, 0
 }
 
 // compare handles the operators: =, !, >, <, &

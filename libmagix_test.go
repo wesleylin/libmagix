@@ -78,7 +78,7 @@ func TestMatchPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path := libmagix.MatchPath(tt.data, rules)
+			path := libmagix.MatchPath(tt.data, rules, 0)
 
 			if tt.expectedMsg == "" {
 				if len(path) > 0 {

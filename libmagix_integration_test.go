@@ -291,3 +291,44 @@ func TestTIFFIdentificationSample(t *testing.T) {
 		t.Errorf("Got %q, want %q", got.Message, want)
 	}
 }
+
+func TestZipIdentification(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/archive", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	zipData, err := os.ReadFile("testdata/sample.zip")
+	if err != nil {
+		t.Fatalf("Failed to read test ZIP: %v", err)
+	}
+
+	got := engine.Identify(zipData)
+	want := "Zip archive data"
+
+	if got == nil || got.Message != want {
+		t.Errorf("Identify() = %v, want %q", got, want)
+	}
+}
+
+func TestOOXMLIdentificationMock(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/archive", logger)
+	if err != nil {
+		t.Fatalf("Failed to init: %v", err)
+	}
+
+	// Mock OOXML: PK\x03\x04 + some filler + [Content_Types].xml + filler + word/
+	data := make([]byte, 1000)
+	copy(data[0:4], "PK\x03\x04")
+	copy(data[100:119], "[Content_Types].xml")
+	copy(data[200:205], "word/")
+
+	got := engine.Identify(data)
+	want := "Zip archive data, Microsoft Office Open XML Microsoft Word document"
+
+	if got == nil || got.Message != want {
+		t.Errorf("Identify() = %v, want %q", got, want)
+	}
+}

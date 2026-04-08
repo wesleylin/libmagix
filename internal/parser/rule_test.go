@@ -59,11 +59,23 @@ func TestRule_Match(t *testing.T) {
 			data: []byte("123"),
 			want: false,
 		},
+		{
+			name: "Search match found",
+			rule: Rule{Offset: 0, Type: "search", SearchRange: 10, Value: "FOUND"},
+			data: []byte("---FOUND---"),
+			want: true,
+		},
+		{
+			name: "Search match NOT found (out of range)",
+			rule: Rule{Offset: 0, Type: "search", SearchRange: 5, Value: "FOUND"},
+			data: []byte("---FOUND---"),
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.rule.Match(tt.data); got != tt.want {
+			if got, _ := tt.rule.Match(tt.data, 0); got != tt.want {
 				t.Errorf("Rule.Match() = %v, want %v", got, tt.want)
 			}
 		})

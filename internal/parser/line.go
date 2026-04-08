@@ -28,6 +28,12 @@ func ParseLine(line string) (*Rule, error) {
 		offsetPart = offsetPart[1:]
 	}
 
+	isRelative := false
+	if strings.HasPrefix(offsetPart, "&") {
+		isRelative = true
+		offsetPart = offsetPart[1:]
+	}
+
 	offset, isIndirect, ptrOff, ptrType, ptrAdd, err := parseOffset(offsetPart)
 	if err != nil {
 		return nil, err
@@ -35,6 +41,13 @@ func ParseLine(line string) (*Rule, error) {
 
 	rawType := parts[1]
 	rawValue := parts[2]
+
+	var searchRange int64
+	if strings.HasPrefix(rawType, "search") && strings.Contains(rawType, "/") {
+		tParts := strings.SplitN(rawType, "/", 2)
+		rawType = tParts[0]
+		searchRange, _ = strconv.ParseInt(tParts[1], 0, 64)
+	}
 
 	// parsing for mask and hashmask
 	typeStr, mask, hasMask, err := parseTypeAndMask(rawType)
@@ -77,6 +90,9 @@ func ParseLine(line string) (*Rule, error) {
 		PointerOffset: ptrOff,
 		PointerType:   ptrType,
 		PointerAdd:    ptrAdd,
+
+		SearchRange: searchRange,
+		IsRelative:  isRelative,
 	}, nil
 }
 
