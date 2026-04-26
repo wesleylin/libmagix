@@ -32,6 +32,12 @@ type Rule struct {
 
 	Children []Rule
 	RuleName string // For 'name' blocks
+
+	// Pascal String support: pstring/modifier
+	PStringLengthType string // 'B', 'H', 'h', 'l', 'L'
+
+	// Indirect Offset Adjustment: (offset.type+adj)
+	PointerAdjustment int64
 }
 
 func (r Rule) String() string {
@@ -76,6 +82,12 @@ func (r *Rule) Match(data []byte, baseOffset int64, forcedRelative bool) (bool, 
 	switch r.Type {
 	case "string":
 		return r.matchString(data, actualOffset)
+	case "pstring":
+		return r.matchPString(data, actualOffset)
+	case "lestring16":
+		return r.matchUTF16(data, actualOffset, binary.LittleEndian)
+	case "bestring16":
+		return r.matchUTF16(data, actualOffset, binary.BigEndian)
 	case "search":
 		return r.matchSearch(data, actualOffset)
 	default:
@@ -129,7 +141,7 @@ func (r *Rule) resolveOffset(data []byte, baseOffset int64, forcedRelative bool)
 			}
 			pointerVal = int64(binary.BigEndian.Uint32(data[ptrOff : ptrOff+4]))
 		}
-		actualOffset = pointerVal + r.PointerAdd
+		actualOffset = pointerVal + r.PointerAdd + r.PointerAdjustment
 	}
 
 	return actualOffset, true
@@ -147,6 +159,95 @@ func (r *Rule) matchString(data []byte, offset int64) (bool, int64) {
 		return true, offset
 	}
 	return false, 0
+}
+
+func (r *Rule) matchPString(data []byte, offset int64) (bool, int64) {
+	if offset < 0 || offset >= int64(len(data)) {
+		return false, 0
+	}
+
+	var strLen int64
+	var headerLen int64
+
+	switch r.PStringLengthType {
+	case "B": // 1-byte length
+		strLen = int64(data[offset])
+		headerLen = 1
+	case "h": // 2-byte little-endian
+		if offset+2 > int64(len(data)) {
+			return false, 0
+		}
+		strLen = int64(binary.LittleEndian.Uint16(data[offset : offset+2]))
+		headerLen = 2
+	case "H": // 2-byte big-endian
+		if offset+2 > int64(len(data)) {
+			return false, 0
+		}
+		strLen = int64(binary.BigEndian.Uint16(data[offset : offset+2]))
+		headerLen = 2
+	case "l": // 4-byte little-endian
+		if offset+4 > int64(len(data)) {
+			return false, 0
+		}
+		strLen = int64(binary.LittleEndian.Uint32(data[offset : offset+4]))
+		headerLen = 4
+	case "L": // 4-byte big-endian
+		if offset+4 > int64(len(data)) {
+			return false, 0
+		}
+		strLen = int64(binary.BigEndian.Uint32(data[offset : offset+4]))
+		headerLen = 4
+	default:
+		// Default to 1-byte if not specified
+		strLen = int64(data[offset])
+		headerLen = 1
+	}
+
+	dataStart := offset + headerLen
+	if dataStart+strLen > int64(len(data)) {
+		return false, 0
+	}
+
+	actualStr := data[dataStart : dataStart+strLen]
+	expectedVal, ok := r.Value.(string)
+	if !ok {
+		// If it's not a string check (e.g. 'x'), then any valid pstring matches
+		return true, dataStart + strLen
+	}
+
+	if strings.Contains(string(actualStr), expectedVal) {
+		return true, dataStart + strLen
+	}
+
+	return false, 0
+}
+
+func (r *Rule) matchUTF16(data []byte, offset int64, order binary.ByteOrder) (bool, int64) {
+	expectedVal, ok := r.Value.(string)
+	if !ok {
+		return false, 0
+	}
+
+	if offset < 0 || offset+2 > int64(len(data)) {
+		return false, 0
+	}
+
+	utf16Buf := make([]uint16, len(expectedVal))
+	for i, runeVal := range expectedVal {
+		utf16Buf[i] = uint16(runeVal)
+	}
+
+	pattern := make([]byte, len(utf16Buf)*2)
+	for i, u := range utf16Buf {
+		order.PutUint16(pattern[i*2:], u)
+	}
+
+	idx := bytes.Index(data[offset:], pattern)
+	if idx == -1 {
+		return false, 0
+	}
+
+	return true, offset + int64(idx) + int64(len(pattern))
 }
 
 func (r *Rule) matchSearch(data []byte, offset int64) (bool, int64) {

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"encoding/binary"
 	"testing"
 )
 
@@ -161,5 +162,138 @@ func TestRule_MatchByte(t *testing.T) {
 				t.Errorf("MatchByte() = %v, want %v for input %v", got, tt.expected, tt.input)
 			}
 		})
+	}
+}
+
+func TestRule_Match_PString(t *testing.T) {
+	tests := []struct {
+		name       string
+		rule       Rule
+		data       []byte
+		wantMatch  bool
+		wantOffset int64
+	}{
+		{
+			name: "pstring/B - byte length prefix",
+			rule: Rule{
+				Offset:            0,
+				Type:              "pstring",
+				PStringLengthType: "B",
+				Value:             "hello",
+			},
+			data:       []byte{0x05, 'h', 'e', 'l', 'l', 'o', 'w'},
+			wantMatch:  true,
+			wantOffset: 6,
+		},
+		{
+			name: "pstring/h - 2-byte LE length prefix",
+			rule: Rule{
+				Offset:            0,
+				Type:              "pstring",
+				PStringLengthType: "h",
+				Value:             "world",
+			},
+			data:       []byte{0x05, 0x00, 'w', 'o', 'r', 'l', 'd'},
+			wantMatch:  true,
+			wantOffset: 7,
+		},
+		{
+			name: "pstring/H - 2-byte BE length prefix",
+			rule: Rule{
+				Offset:            0,
+				Type:              "pstring",
+				PStringLengthType: "H",
+				Value:             "world",
+			},
+			data:       []byte{0x00, 0x05, 'w', 'o', 'r', 'l', 'd'},
+			wantMatch:  true,
+			wantOffset: 7,
+		},
+		{
+			name: "pstring/l - 4-byte LE length prefix",
+			rule: Rule{
+				Offset:            0,
+				Type:              "pstring",
+				PStringLengthType: "l",
+				Value:             "long",
+			},
+			data:       []byte{0x04, 0x00, 0x00, 0x00, 'l', 'o', 'n', 'g'},
+			wantMatch:  true,
+			wantOffset: 8,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMatch, gotOffset := tt.rule.Match(tt.data, 0, false)
+			if gotMatch != tt.wantMatch || gotOffset != tt.wantOffset {
+				t.Errorf("Match() = (%v, %v), want (%v, %v)", gotMatch, gotOffset, tt.wantMatch, tt.wantOffset)
+			}
+		})
+	}
+}
+
+func TestRule_Match_UTF16(t *testing.T) {
+	tests := []struct {
+		name       string
+		rule       Rule
+		data       []byte
+		wantMatch  bool
+		wantOffset int64
+	}{
+		{
+			name: "lestring16 match",
+			rule: Rule{
+				Offset: 0,
+				Type:   "lestring16",
+				Value:  "ABC",
+			},
+			data:       []byte{'A', 0x00, 'B', 0x00, 'C', 0x00},
+			wantMatch:  true,
+			wantOffset: 6,
+		},
+		{
+			name: "bestring16 match",
+			rule: Rule{
+				Offset: 0,
+				Type:   "bestring16",
+				Value:  "ABC",
+			},
+			data:       []byte{0x00, 'A', 0x00, 'B', 0x00, 'C'},
+			wantMatch:  true,
+			wantOffset: 6,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotMatch, gotOffset := tt.rule.Match(tt.data, 0, false)
+			if gotMatch != tt.wantMatch || gotOffset != tt.wantOffset {
+				t.Errorf("Match() = (%v, %v), want (%v, %v)", gotMatch, gotOffset, tt.wantMatch, tt.wantOffset)
+			}
+		})
+	}
+}
+
+func TestRule_ResolveOffset_IndirectAdjustment(t *testing.T) {
+	// Equivalent to: (2.s+11)
+	rule := Rule{
+		Offset:            0,
+		IsIndirect:        true,
+		PointerOffset:     2,
+		PointerType:       "s", // little-endian short
+		PointerAdd:        0,
+		PointerAdjustment: 11,
+	}
+
+	data := make([]byte, 20)
+	binary.LittleEndian.PutUint16(data[2:4], 5) // Value at offset 2 is 5
+
+	gotOffset, ok := rule.resolveOffset(data, 0, false)
+	if !ok {
+		t.Fatal("resolveOffset failed")
+	}
+	if gotOffset != 16 {
+		t.Errorf("resolveOffset() = %v, want 16", gotOffset)
 	}
 }
