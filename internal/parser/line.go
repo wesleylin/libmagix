@@ -43,10 +43,15 @@ func ParseLine(line string) (*Rule, error) {
 	rawValue := parts[2]
 
 	var searchRange int64
+	var pstringLenType string
 	if strings.HasPrefix(rawType, "search") && strings.Contains(rawType, "/") {
 		tParts := strings.SplitN(rawType, "/", 2)
 		rawType = tParts[0]
 		searchRange, _ = strconv.ParseInt(tParts[1], 0, 64)
+	} else if strings.HasPrefix(rawType, "pstring") && strings.Contains(rawType, "/") {
+		tParts := strings.SplitN(rawType, "/", 2)
+		rawType = tParts[0]
+		pstringLenType = tParts[1]
 	}
 
 	// parsing for mask and hashmask
@@ -94,10 +99,12 @@ func ParseLine(line string) (*Rule, error) {
 		IsIndirect:    isIndirect,
 		PointerOffset: ptrOff,
 		PointerType:   ptrType,
-		PointerAdd:    ptrAdd,
+		PointerAdd:    0, // We'll use PointerAdjustment for fixed additions
+		PointerAdjustment: ptrAdd,
 
-		SearchRange: searchRange,
-		IsRelative:  isRelative,
+		SearchRange:       searchRange,
+		PStringLengthType: pstringLenType,
+		IsRelative:        isRelative,
 	}, nil
 }
 
@@ -174,7 +181,7 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 
 func parseTypeValue(typeStr string, valueStr string) (any, error) {
 	switch typeStr {
-	case "string":
+	case "string", "pstring", "bestring16", "lestring16":
 		var processedValue []byte
 
 		// 1. Convert the escaped string into actual bytes

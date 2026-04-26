@@ -73,6 +73,38 @@ func TestParseLine(t *testing.T) {
 			want:    nil,
 			wantErr: true,
 		},
+		{
+			name:  "pstring check",
+			input: ">>>2\tpstring/h\tx\tmsg",
+			want: &Rule{
+				Level:             3,
+				Offset:            2,
+				Type:              "pstring",
+				PStringLengthType: "h",
+				MatchAny:          true,
+				Operator:          "=",
+				Message:           "msg",
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Indirect offset with adjustment",
+			input: ">>>>(2.s+11)\tpstring/h\tx\tmsg",
+			want: &Rule{
+				Level:             4,
+				Offset:            0,
+				IsIndirect:        true,
+				PointerOffset:     2,
+				PointerType:       "s",
+				PointerAdjustment: 11,
+				Type:              "pstring",
+				PStringLengthType: "h",
+				MatchAny:          true,
+				Operator:          "=",
+				Message:           "msg",
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

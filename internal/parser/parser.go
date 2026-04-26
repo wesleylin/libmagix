@@ -41,15 +41,17 @@ func (p *Parser) Parse(r io.Reader) ([]Rule, error) {
 			continue
 		}
 
-		// Handle MIME attribute
-		if strings.HasPrefix(line, "!:mime") {
-			if lastAddedRule != nil {
-				parts := strings.Fields(line)
-				if len(parts) >= 2 {
-					// We modify the rule we JUST added
-					lastAddedRule.Mime = parts[1]
+		// Handle magic attributes
+		if strings.HasPrefix(line, "!:") {
+			if strings.HasPrefix(line, "!:mime") {
+				if lastAddedRule != nil {
+					parts := strings.Fields(line)
+					if len(parts) >= 2 {
+						lastAddedRule.Mime = parts[1]
+					}
 				}
 			}
+			// For now, we skip other attributes (!:apple, !:ext, etc.)
 			continue
 		}
 
