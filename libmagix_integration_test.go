@@ -356,3 +356,46 @@ func TestSubroutineIdentification(t *testing.T) {
 		}
 	}
 }
+
+func TestStarOfficeIdentification(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	engine, err := libmagix.New("magic/Magdir/wordprocessorOfficial", logger)
+	if err != nil {
+		t.Fatalf("Failed to load official magic: %v", err)
+	}
+
+	// Mock StarOffice Gallery theme header (.thm)
+	// Offset 0: 0x04 0x00 (ubeshort)
+	// Offset 2: 0x06 00 (uleshort length prefix for pstring/h)
+	// Offset 2.s+4 = 6+4 = 10: 0x01 00 00 00 (ulelong = 1 object)
+	// Offset 2.s+11 = 6+11 = 17: 0x03 00 (uleshort length prefix for 1st object pstring/h)
+	// Offset 2.s+13 = 6+13 = 19: 0x20 (ubyte > 0x1F to trigger main category)
+	data := make([]byte, 100)
+	binary.BigEndian.PutUint16(data[0:2], 0x0400)
+	binary.LittleEndian.PutUint16(data[2:4], 6)
+	copy(data[4:], "MyName")
+	binary.LittleEndian.PutUint32(data[10:14], 1) // 1 object
+	binary.LittleEndian.PutUint16(data[17:19], 3) // 1st object name length
+	data[19] = 0x20                               // Trigger StarOffice Gallery theme rule at (2.s+13)
+	copy(data[20:], "Obj")
+
+	// Identify
+	got := engine.Identify(data)
+
+	// Note: Currently we haven't implemented printf formatting, 
+	// so it will literally show "%s" and "%u" in the output for now.
+	// 630: "StarOffice Gallery theme"
+	// 636: " %s"
+	// 638: ", %u object" (from \b, %u object)
+	// 640: (skipped because ulelong is 1, and rule is !1)
+	// 642: (matches >0)
+	// 644: ", 1st %s" (from \b, 1st %s)
+	want := "StarOffice Gallery theme %s, %u object, 1st %s"
+
+	if got == nil {
+		t.Fatal("Expected identification, got nil")
+	}
+	if got.Message != want {
+		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}
