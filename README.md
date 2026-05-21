@@ -47,6 +47,10 @@ func main() {
 }
 ```
 
+running 
+
+go run cmd/main.go testdata/sample.docx
+
 ## How it Works
 
 libmagix follows a three-step process to identify files:
