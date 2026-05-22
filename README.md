@@ -1,3 +1,5 @@
+[![Go CI Status](https://github.com/wesleylin/libmagix/actions/workflows/go.yml/badge.svg)](https://github.com/wesleylin/libmagix/actions)
+
 # libmagix
 
 A lightweight, pure Go implementation of the `libmagic` file identification engine. `libmagix` parses standard magic files and builds a recursive rule tree to identify file types and MIME types based on binary signatures.
@@ -47,7 +49,7 @@ func main() {
 }
 ```
 
-running 
+running
 
 go run cmd/main.go testdata/sample.docx
 
