@@ -23,7 +23,7 @@ func matchString(data []byte, r *Rule, offset int64) (bool, int64) {
 		return true, offset
 	}
 	if bytes.HasPrefix(data[offset:], []byte(valStr)) {
-		return true, offset
+		return true, offset + int64(len(valStr))
 	}
 	return false, 0
 }
@@ -210,28 +210,32 @@ func matchByte(data []byte, r *Rule, offset int64) (bool, int64) {
 		actual &= r.Mask
 		expected &= r.Mask
 	}
-	return compare(actual, expected, r.Operator), offset + 1
+
+	matched := compare(actual, expected, r.Operator)
+	if !matched {
+		return false, offset
+	}
+	return true, offset + 1
 }
 
 // matchShortLE matches little-endian short (2 bytes) rules against data
 func matchShortLE(data []byte, r *Rule, offset int64) (bool, int64) {
-	if offset < 0 {
-		return false, 0
-	}
-	if offset+2 > int64(len(data)) {
+	if offset < 0 || offset+2 > int64(len(data)) {
 		return false, 0
 	}
 	actual := uint64(binary.LittleEndian.Uint16(data[offset : offset+2]))
 	expected := castToUint64(r.Value)
 
 	if r.HasMask {
-		// Apply mask to both actual and expected for consistent comparison
-		maskedActual := actual & r.Mask
-		maskedExpected := expected & r.Mask
-		return compare(maskedActual, maskedExpected, r.Operator), offset
+		actual &= r.Mask
+		expected &= r.Mask
 	}
 
-	return compare(actual, expected, r.Operator), offset
+	matched := compare(actual, expected, r.Operator)
+	if !matched {
+		return false, offset
+	}
+	return true, offset + 2
 }
 
 // matchShortBE matches big-endian short (2 bytes) rules against data
@@ -247,12 +251,15 @@ func matchShortBE(data []byte, r *Rule, offset int64) (bool, int64) {
 
 	if r.HasMask {
 		// Apply mask to both actual and expected for consistent comparison
-		maskedActual := actual & r.Mask
-		maskedExpected := expected & r.Mask
-		return compare(maskedActual, maskedExpected, r.Operator), offset
+		actual = actual & r.Mask
+		expected = expected & r.Mask
 	}
 
-	return compare(actual, expected, r.Operator), offset
+	matched := compare(actual, expected, r.Operator)
+	if !matched {
+		return false, offset
+	}
+	return true, offset + 2
 }
 
 // matchLongLE matches little-endian long (4 bytes) rules against data
@@ -267,13 +274,15 @@ func matchLongLE(data []byte, r *Rule, offset int64) (bool, int64) {
 	expected := castToUint64(r.Value)
 
 	if r.HasMask {
-		// Apply mask to both actual and expected for consistent comparison
-		maskedActual := actual & r.Mask
-		maskedExpected := expected & r.Mask
-		return compare(maskedActual, maskedExpected, r.Operator), offset
+		actual &= r.Mask
+		expected &= r.Mask
 	}
 
-	return compare(actual, expected, r.Operator), offset
+	matched := compare(actual, expected, r.Operator)
+	if !matched {
+		return false, offset
+	}
+	return true, offset + 4
 }
 
 // matchLongBE matches big-endian long (4 bytes) rules against data
@@ -288,13 +297,15 @@ func matchLongBE(data []byte, r *Rule, offset int64) (bool, int64) {
 	expected := castToUint64(r.Value)
 
 	if r.HasMask {
-		// Apply mask to both actual and expected for consistent comparison
-		maskedActual := actual & r.Mask
-		maskedExpected := expected & r.Mask
-		return compare(maskedActual, maskedExpected, r.Operator), offset
+		actual &= r.Mask
+		expected &= r.Mask
 	}
 
-	return compare(actual, expected, r.Operator), offset
+	matched := compare(actual, expected, r.Operator)
+	if !matched {
+		return false, offset
+	}
+	return true, offset + 4
 }
 
 // matchNumericHandler is a fallback handler for unknown types that defaults to numeric matching
@@ -304,29 +315,35 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 	}
 
 	var actual uint64
+	var stride int64
 	switch r.Type {
 	case "belong", "ubelong", "uint32", "long": // Big Endian 4 bytes
 		if offset+4 > int64(len(data)) {
 			return false, 0
 		}
 		actual = uint64(binary.BigEndian.Uint32(data[offset : offset+4]))
+		stride = 4
 	case "lelong", "ulelong": // Little Endian 4 bytes
 		if offset+4 > int64(len(data)) {
 			return false, 0
 		}
 		actual = uint64(binary.LittleEndian.Uint32(data[offset : offset+4]))
+		stride = 4
 	case "short", "beshort", "ubeshort": // Big Endian 2 bytes
 		if offset+2 > int64(len(data)) {
 			return false, 0
 		}
 		actual = uint64(binary.BigEndian.Uint16(data[offset : offset+2]))
+		stride = 2
 	case "leshort", "uleshort", "uint16": // Little Endian 2 bytes
 		if offset+2 > int64(len(data)) {
 			return false, 0
 		}
 		actual = uint64(binary.LittleEndian.Uint16(data[offset : offset+2]))
+		stride = 2
 	case "byte", "ubyte": // 1 byte
 		actual = uint64(data[offset])
+		stride = 1
 	default:
 		return false, 0
 	}
@@ -336,7 +353,12 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 	}
 
 	expected := castToUint64(r.Value)
-	return compare(actual, expected, r.Operator), offset
+
+	matched := compare(actual, expected, r.Operator)
+	if !matched {
+		return false, offset
+	}
+	return true, offset + stride
 }
 
 // compare handles the operators: =, !, >, <, &, ^
@@ -370,10 +392,11 @@ func castToUint64(v any) uint64 {
 		return uint64(val)
 	case uint8:
 		return uint64(val)
+	// prevent cast to 0 value by casting first
 	case int:
-		return uint64(val) // Zero-extend the entire value to 64 bits
+		return uint64(int64(val)) // Zero-extend the entire value to 64 bits
 	case int32:
-		return uint64(val) // Truncate/zero-extend to 64 bits
+		return uint64(uint32(val)) // Truncate/zero-extend to 64 bits
 	case int64:
 		return uint64(val) // Zero-extend the entire value to 64 bits
 	default:

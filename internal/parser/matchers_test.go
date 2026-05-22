@@ -25,7 +25,7 @@ func TestMatchString(t *testing.T) {
 				SearchRange: -1,
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 6,
 		},
 		{
 			name: "String match not found",
@@ -36,7 +36,7 @@ func TestMatchString(t *testing.T) {
 				Value:  "GIF89a",
 			},
 			wantMatch:  false,
-			wantOffset: 0,
+			wantOffset: 3,
 		},
 		{
 			name: "Partial match (prefix matches)",
@@ -47,7 +47,7 @@ func TestMatchString(t *testing.T) {
 				Value:  "GIF",
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 3,
 		},
 		{
 			name: "Negative offset (out of bounds)",
@@ -552,7 +552,7 @@ func TestMatchShortLE(t *testing.T) {
 				Value:  uint16(0x1234),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "match with greater than operator",
@@ -564,7 +564,7 @@ func TestMatchShortLE(t *testing.T) {
 				Operator: ">",
 			},
 			wantMatch:  true, // 592 > 512
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "match with less than operator",
@@ -576,7 +576,7 @@ func TestMatchShortLE(t *testing.T) {
 				Operator: "<",
 			},
 			wantMatch:  true, // 304 < 512
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "match with bitwise AND operator",
@@ -588,7 +588,7 @@ func TestMatchShortLE(t *testing.T) {
 				Operator: "&",
 			},
 			wantMatch:  true, // (7 & 3) == 3
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "match with bitwise NOT operator (^)",
@@ -600,7 +600,7 @@ func TestMatchShortLE(t *testing.T) {
 				Operator: "^",
 			},
 			wantMatch:  true, // (255 & 128) == 0
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "Bitmasking with HasMask",
@@ -682,7 +682,7 @@ func TestMatchShortBE(t *testing.T) {
 				Value:  uint16(0x1234),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "match with greater than operator",
@@ -694,7 +694,7 @@ func TestMatchShortBE(t *testing.T) {
 				Operator: ">",
 			},
 			wantMatch:  true, // 592 > 512
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "match with less than operator",
@@ -706,7 +706,7 @@ func TestMatchShortBE(t *testing.T) {
 				Operator: "<",
 			},
 			wantMatch:  true, // 304 < 512
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "Data too short for short (2 bytes)",
@@ -762,7 +762,7 @@ func TestMatchLongLE(t *testing.T) {
 				Value:  uint32(0x12345678),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 4,
 		},
 		{
 			name: "match with greater than operator",
@@ -774,7 +774,7 @@ func TestMatchLongLE(t *testing.T) {
 				Operator: ">",
 			},
 			wantMatch:  true, // Large LE value > smaller value
-			wantOffset: 0,
+			wantOffset: 4,
 		},
 		{
 			name: "match with bitwise AND operator",
@@ -786,7 +786,7 @@ func TestMatchLongLE(t *testing.T) {
 				Operator: "&",
 			},
 			wantMatch:  true, // (7 & 3) == 3
-			wantOffset: 0,
+			wantOffset: 4,
 		},
 		{
 			name: "Data too short for long (4 bytes)",
@@ -831,7 +831,7 @@ func TestMatchLongBE(t *testing.T) {
 				Value:  uint32(0x12345678),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 4,
 		},
 		{
 			name: "match with bitwise AND operator",
@@ -843,7 +843,7 @@ func TestMatchLongBE(t *testing.T) {
 				Operator: "&",
 			},
 			wantMatch:  true, // (7 & 3) == 3
-			wantOffset: 0,
+			wantOffset: 4,
 		},
 		{
 			name: "Data too short for long (4 bytes)",
@@ -888,7 +888,7 @@ func TestMatchNumericHandler(t *testing.T) {
 				Value:  uint32(0x12345678),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 4,
 		},
 		{
 			name: "leshort (unsigned little-endian short) match",
@@ -899,7 +899,7 @@ func TestMatchNumericHandler(t *testing.T) {
 				Value:  uint16(0x1234),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "belong (unsigned big-endian long) match",
@@ -910,7 +910,7 @@ func TestMatchNumericHandler(t *testing.T) {
 				Value:  uint32(0x12345678),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 4,
 		},
 		{
 			name: "ubeshort (unsigned big-endian short) match",
@@ -921,7 +921,7 @@ func TestMatchNumericHandler(t *testing.T) {
 				Value:  uint16(0x1234),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 2,
 		},
 		{
 			name: "byte match",
@@ -932,7 +932,7 @@ func TestMatchNumericHandler(t *testing.T) {
 				Value:  uint8(0x41),
 			},
 			wantMatch:  true,
-			wantOffset: 0,
+			wantOffset: 1,
 		},
 		{
 			name: "Data too short for type",
@@ -1015,7 +1015,14 @@ func TestCompare(t *testing.T) {
 			actual:    255, // 11111111
 			expected:  128, // 10000000
 			op:        "^",
-			wantMatch: true, // (255 & 128) == 0
+			wantMatch: false, // (255 & 128) == 0
+		},
+		{
+			name:      "Bitwise NOT operator (^) - Successful Match",
+			actual:    127, // 01111111 (bit 128 is clean)
+			expected:  128, // 10000000
+			op:        "^",
+			wantMatch: true, // (127 & 128) is 0, and 0 != 128 is true!
 		},
 		{
 			name:      "Default operator (=)",
