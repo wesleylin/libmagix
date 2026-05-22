@@ -18,6 +18,10 @@ func matchString(data []byte, r *Rule, offset int64) (bool, int64) {
 	if offset < 0 || offset >= int64(len(data)) {
 		return false, 0
 	}
+	// Empty string matches at the current offset (must be within bounds)
+	if valStr == "" {
+		return true, offset
+	}
 	if bytes.HasPrefix(data[offset:], []byte(valStr)) {
 		return true, offset
 	}
@@ -30,55 +34,69 @@ func matchPString(data []byte, r *Rule, offset int64) (bool, int64) {
 		return false, 0
 	}
 
-	var strLen int64
+	var strLen int
 	var headerLen int64
 
 	switch r.PStringLengthType {
 	case "B": // 1-byte length
-		strLen = int64(data[offset])
+		strLen = int(data[offset])
 		headerLen = 1
-	case "h": // 2-byte little-endian
+	case "h": // 2-byte little-endian: low byte first, then high byte
 		if offset+2 > int64(len(data)) {
 			return false, 0
 		}
-		strLen = int64(binary.LittleEndian.Uint16(data[offset : offset+2]))
+		// First byte is low-order, second byte is high-order
+		strLen = int(binary.LittleEndian.Uint16(data[offset : offset+2]))
 		headerLen = 2
-	case "H": // 2-byte big-endian
+	case "H": // 2-byte big-endian: high byte first, then low byte
 		if offset+2 > int64(len(data)) {
 			return false, 0
 		}
-		strLen = int64(binary.BigEndian.Uint16(data[offset : offset+2]))
+		strLen = int(binary.BigEndian.Uint16(data[offset : offset+2]))
 		headerLen = 2
 	case "l": // 4-byte little-endian
 		if offset+4 > int64(len(data)) {
 			return false, 0
 		}
-		strLen = int64(binary.LittleEndian.Uint32(data[offset : offset+4]))
+		// bytes[0] is LSB, bytes[3] is MSB
+		strLen = int(binary.LittleEndian.Uint32(data[offset : offset+4]))
 		headerLen = 4
 	case "L": // 4-byte big-endian
 		if offset+4 > int64(len(data)) {
 			return false, 0
 		}
-		strLen = int64(binary.BigEndian.Uint32(data[offset : offset+4]))
+		strLen = int(binary.BigEndian.Uint32(data[offset : offset+4]))
 		headerLen = 4
 	default:
-		strLen = int64(data[offset])
+		// Default to 1-byte length
+		strLen = int(data[offset])
 		headerLen = 1
 	}
 
-	dataStart := offset + headerLen
-	if dataStart+strLen > int64(len(data)) {
+	dataStart := offset + int64(headerLen)
+	if dataStart > int64(len(data)) {
 		return false, 0
 	}
 
-	actualStr := data[dataStart : dataStart+strLen]
+	maxRead := len(data) - int(dataStart)
+	if strLen > maxRead {
+		strLen = maxRead
+	}
+
+	actualStr := data[dataStart : dataStart+int64(strLen)]
 	expectedVal, ok := r.Value.(string)
 	if !ok {
-		return true, dataStart + strLen
+		// Invalid type - still return match but skip comparison
+		return true, dataStart + int64(strLen)
+	}
+
+	// Empty string matches anywhere in the available data
+	if expectedVal == "" && len(actualStr) >= 0 {
+		return true, dataStart
 	}
 
 	if strings.Contains(string(actualStr), expectedVal) {
-		return true, dataStart + strLen
+		return true, dataStart + int64(strLen)
 	}
 
 	return false, 0
@@ -95,14 +113,24 @@ func matchUTF16LE(data []byte, r *Rule, offset int64) (bool, int64) {
 		return false, 0
 	}
 
-	utf16Buf := make([]uint16, len(expectedVal))
-	for i, runeVal := range expectedVal {
-		utf16Buf[i] = uint16(runeVal)
+	// Empty pattern matches at the offset after minimum UTF-16 header (2 bytes)
+	if expectedVal == "" {
+		return true, offset + 2
 	}
 
-	pattern := make([]byte, len(utf16Buf)*2)
-	for i, u := range utf16Buf {
-		binary.LittleEndian.PutUint16(pattern[i*2:], u)
+	patternLen := len(expectedVal) * 2
+	if int64(patternLen)+offset > int64(len(data)) {
+		return false, 0
+	}
+
+	utf16Buf := make([]uint16, patternLen/2)
+	for i := 0; i < len(expectedVal); i++ {
+		utf16Buf[i] = uint16(rune(expectedVal[i]))
+	}
+
+	pattern := make([]byte, patternLen)
+	for i := 0; i < len(utf16Buf); i++ {
+		binary.LittleEndian.PutUint16(pattern[i*2:], utf16Buf[i])
 	}
 
 	idx := bytes.Index(data[offset:], pattern)
@@ -149,21 +177,25 @@ func matchSearch(data []byte, r *Rule, offset int64) (bool, int64) {
 	if !ok {
 		return false, 0
 	}
-	pattern := []byte(valStr)
-	if offset < 0 || offset >= int64(len(data)) {
+	if offset < 0 || offset > int64(len(data)) {
 		return false, 0
 	}
 
-	searchEnd := offset + r.SearchRange
-	if searchEnd > int64(len(data)) {
-		searchEnd = int64(len(data))
+	pattern := []byte(valStr)
+	maxSearchEnd := int64(len(data))
+
+	if r.SearchRange > 0 && offset+r.SearchRange < maxSearchEnd {
+		maxSearchEnd = offset + r.SearchRange
 	}
 
-	idx := bytes.Index(data[offset:searchEnd], pattern)
+	if offset > maxSearchEnd {
+		return false, 0
+	}
+
+	idx := bytes.Index(data[offset:maxSearchEnd], pattern)
 	if idx == -1 {
 		return false, 0
 	}
-	// Return the absolute offset where match was found (offset + relative index)
 	return true, offset + int64(idx)
 }
 
@@ -172,65 +204,96 @@ func matchByte(data []byte, r *Rule, offset int64) (bool, int64) {
 	if offset < 0 || offset >= int64(len(data)) {
 		return false, 0
 	}
-
 	actual := uint64(data[offset])
-	if r.HasMask {
-		actual = actual & r.Mask
-	}
-
 	expected := castToUint64(r.Value)
-	return compare(actual, expected, r.Operator), offset
+	if r.HasMask {
+		actual &= r.Mask
+		expected &= r.Mask
+	}
+	return compare(actual, expected, r.Operator), offset + 1
 }
 
 // matchShortLE matches little-endian short (2 bytes) rules against data
 func matchShortLE(data []byte, r *Rule, offset int64) (bool, int64) {
+	if offset < 0 {
+		return false, 0
+	}
 	if offset+2 > int64(len(data)) {
 		return false, 0
 	}
 	actual := uint64(binary.LittleEndian.Uint16(data[offset : offset+2]))
-	if r.HasMask {
-		actual = actual & r.Mask
-	}
 	expected := castToUint64(r.Value)
+
+	if r.HasMask {
+		// Apply mask to both actual and expected for consistent comparison
+		maskedActual := actual & r.Mask
+		maskedExpected := expected & r.Mask
+		return compare(maskedActual, maskedExpected, r.Operator), offset
+	}
+
 	return compare(actual, expected, r.Operator), offset
 }
 
 // matchShortBE matches big-endian short (2 bytes) rules against data
 func matchShortBE(data []byte, r *Rule, offset int64) (bool, int64) {
+	if offset < 0 {
+		return false, 0
+	}
 	if offset+2 > int64(len(data)) {
 		return false, 0
 	}
 	actual := uint64(binary.BigEndian.Uint16(data[offset : offset+2]))
-	if r.HasMask {
-		actual = actual & r.Mask
-	}
 	expected := castToUint64(r.Value)
+
+	if r.HasMask {
+		// Apply mask to both actual and expected for consistent comparison
+		maskedActual := actual & r.Mask
+		maskedExpected := expected & r.Mask
+		return compare(maskedActual, maskedExpected, r.Operator), offset
+	}
+
 	return compare(actual, expected, r.Operator), offset
 }
 
 // matchLongLE matches little-endian long (4 bytes) rules against data
 func matchLongLE(data []byte, r *Rule, offset int64) (bool, int64) {
+	if offset < 0 {
+		return false, 0
+	}
 	if offset+4 > int64(len(data)) {
 		return false, 0
 	}
 	actual := uint64(binary.LittleEndian.Uint32(data[offset : offset+4]))
-	if r.HasMask {
-		actual = actual & r.Mask
-	}
 	expected := castToUint64(r.Value)
+
+	if r.HasMask {
+		// Apply mask to both actual and expected for consistent comparison
+		maskedActual := actual & r.Mask
+		maskedExpected := expected & r.Mask
+		return compare(maskedActual, maskedExpected, r.Operator), offset
+	}
+
 	return compare(actual, expected, r.Operator), offset
 }
 
 // matchLongBE matches big-endian long (4 bytes) rules against data
 func matchLongBE(data []byte, r *Rule, offset int64) (bool, int64) {
+	if offset < 0 {
+		return false, 0
+	}
 	if offset+4 > int64(len(data)) {
 		return false, 0
 	}
 	actual := uint64(binary.BigEndian.Uint32(data[offset : offset+4]))
-	if r.HasMask {
-		actual = actual & r.Mask
-	}
 	expected := castToUint64(r.Value)
+
+	if r.HasMask {
+		// Apply mask to both actual and expected for consistent comparison
+		maskedActual := actual & r.Mask
+		maskedExpected := expected & r.Mask
+		return compare(maskedActual, maskedExpected, r.Operator), offset
+	}
+
 	return compare(actual, expected, r.Operator), offset
 }
 
@@ -290,13 +353,13 @@ func compare(actual, expected uint64, op string) bool {
 	case "&":
 		return (actual & expected) == expected
 	case "^":
-		return (actual & expected) == 0
+		return (actual & expected) != expected
 	default:
 		return actual == expected
 	}
 }
 
-// castToUint64 safely converts r.Value (uint8, uint16, uint32, uint64, int) to uint64
+// castToUint64 safely converts r.Value (uint8, uint16, uint32, uint64, int, int32, int64) to uint64
 func castToUint64(v any) uint64 {
 	switch val := v.(type) {
 	case uint64:
@@ -308,11 +371,11 @@ func castToUint64(v any) uint64 {
 	case uint8:
 		return uint64(val)
 	case int:
-		return uint64(val)
+		return uint64(val) // Zero-extend the entire value to 64 bits
 	case int32:
-		return uint64(val)
+		return uint64(val) // Truncate/zero-extend to 64 bits
 	case int64:
-		return uint64(val)
+		return uint64(val) // Zero-extend the entire value to 64 bits
 	default:
 		return 0
 	}
