@@ -17,6 +17,8 @@ const (
 	StringTrim
 	StringIgnoreLower
 	StringIgnoreUpper
+	// StringRegexLineCount is regex/l. The range counts lines, not bytes.
+	StringRegexLineCount
 )
 
 // Rule represents a single line in a magic file
@@ -151,6 +153,13 @@ func (r *Rule) MatchValue(data []byte, baseOffset int64, forcedRelative bool) (b
 		// default and clear are level-control tests; the walker decides
 		// whether a default is allowed to fire.
 		return true, actualOffset, nil
+	}
+	if r.Type == "offset" {
+		// offset prints where this rule was evaluated. It does not read a field.
+		if actualOffset < 0 {
+			return false, 0, nil
+		}
+		return true, actualOffset, actualOffset
 	}
 
 	// 2. MatchAny 'x' (always matches if within bounds)

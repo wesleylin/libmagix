@@ -154,8 +154,15 @@ func parseStringModifiers(raw string) (typeStr string, searchRange int64, pstrin
 		switch rest[i] {
 		case 's':
 			offsetAtStart = true
-		case 'B', 'H', 'h', 'L', 'l':
+		case 'B', 'H', 'h', 'L':
 			pstringLen = string(rest[i])
+		case 'l':
+			// On a regex, /l is the line-count flag. On a pstring it is the length field.
+			if typeStr == "regex" {
+				flags |= StringRegexLineCount
+			} else {
+				pstringLen = "l"
+			}
 		case 't':
 			flags |= StringText
 		case 'b':

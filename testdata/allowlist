@@ -80,3 +80,7 @@ osm
 pnm1
 pnm3
 utf16xmlsvg
+# Local FIT dates, line-bounded regex, and the offset type.
+fit-map-data
+regex-eol
+searchbug

@@ -502,23 +502,118 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 	return true, offset + stride
 }
 
+// regexEnd is the exclusive end of the window a regex may search.
+// regex/Nl treats the range as a line count and stops after that many
+// lines, looking at most 80 bytes per line. A plain range is a byte count.
+// Zero means the rest of the buffer, capped at 8192 bytes.
+func regexEnd(data []byte, offset int64, r *Rule) int64 {
+	nbytes := int64(len(data))
+	if offset < 0 || offset > nbytes {
+		return offset
+	}
+	var lineCount, byteCount int64
+	if r.StringFlags&StringRegexLineCount != 0 {
+		lineCount = r.SearchRange
+		byteCount = lineCount * 80
+	} else {
+		byteCount = r.SearchRange
+	}
+	if byteCount == 0 || byteCount > nbytes-offset {
+		byteCount = nbytes - offset
+	}
+	if byteCount > 8192 {
+		byteCount = 8192
+	}
+	end := offset + byteCount
+	if lineCount == 0 {
+		return end
+	}
+	last := end
+	b := offset
+	lines := lineCount
+	for lines > 0 && b < end {
+		nl := bytes.IndexByte(data[b:end], '\n')
+		cr := bytes.IndexByte(data[b:end], '\r')
+		switch {
+		case nl >= 0:
+			b += int64(nl)
+		case cr >= 0:
+			b += int64(cr)
+		default:
+			return end
+		}
+		if b < end-1 && data[b] == '\r' && data[b+1] == '\n' {
+			b++
+		}
+		if b < end-1 && data[b] == '\n' {
+			b++
+		}
+		last = b
+		lines--
+		b++
+	}
+	if lines > 0 {
+		return end
+	}
+	return last
+}
+
+// excludeNewline makes [^...] stop at a newline, matching REG_NEWLINE.
+func excludeNewline(pat string) string {
+	var b strings.Builder
+	for i := 0; i < len(pat); {
+		if pat[i] == '\\' && i+1 < len(pat) {
+			b.WriteByte(pat[i])
+			b.WriteByte(pat[i+1])
+			i += 2
+			continue
+		}
+		if pat[i] == '[' && i+1 < len(pat) && pat[i+1] == '^' {
+			b.WriteString("[^")
+			i += 2
+			start := i
+			if i < len(pat) && pat[i] == ']' {
+				i++
+			}
+			hasNL := false
+			for i < len(pat) && pat[i] != ']' {
+				if pat[i] == '\\' && i+1 < len(pat) {
+					if pat[i+1] == 'n' {
+						hasNL = true
+					}
+					i += 2
+					continue
+				}
+				if pat[i] == '\n' {
+					hasNL = true
+				}
+				i++
+			}
+			if !hasNL {
+				b.WriteString(`\n`)
+			}
+			b.WriteString(pat[start:i])
+			if i < len(pat) && pat[i] == ']' {
+				b.WriteByte(']')
+				i++
+			}
+			continue
+		}
+		b.WriteByte(pat[i])
+		i++
+	}
+	return b.String()
+}
+
 func findRegex(data []byte, r *Rule, offset int64) (string, int64, int64, bool) {
 	pat, ok := r.Value.(string)
 	if !ok || offset < 0 || offset > int64(len(data)) {
 		return "", 0, 0, false
 	}
-	limit := int64(8192)
-	if r.SearchRange > 0 {
-		limit = r.SearchRange
-	}
-	end := offset + limit
-	if end > int64(len(data)) {
-		end = int64(len(data))
-	}
-	// file compiles with REG_NEWLINE, so ^ and $ also match at line edges.
-	if strings.ContainsAny(pat, "^$") {
-		pat = "(?m)" + pat
-	}
+	end := regexEnd(data, offset, r)
+	// file compiles with REG_NEWLINE: ^ and $ match at line edges, and a
+	// negated class does not consume a newline.
+	pat = "(?m)" + excludeNewline(pat)
 	re, err := regexp.Compile(pat)
 	if err != nil {
 		return "", 0, 0, false

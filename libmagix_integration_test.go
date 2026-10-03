@@ -8,10 +8,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wesleylin/libmagix"
 	"github.com/wesleylin/libmagix/internal/parser"
 )
+
+func TestMain(m *testing.M) {
+	// file's own tests set TZ=UTC. ldate types print local time, so the
+	// vendored results match when local time is UTC.
+	os.Setenv("TZ", "UTC")
+	time.Local = time.UTC
+	os.Exit(m.Run())
+}
 
 func TestGIFIdentification(t *testing.T) {
 	// 1. Setup a logger that only shows errors unless we run with -v

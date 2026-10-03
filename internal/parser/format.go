@@ -304,7 +304,7 @@ func numericKind(typeName string) (bits int, unsigned bool) {
 		return 32, false
 	case "ulong", "ubelong", "ulelong", "uint32":
 		return 32, true
-	case "quad", "bequad", "lequad":
+	case "quad", "bequad", "lequad", "offset":
 		return 64, false
 	case "uquad", "ubequad", "ulequad":
 		return 64, true
