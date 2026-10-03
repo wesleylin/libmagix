@@ -10,43 +10,60 @@ import (
 )
 
 func main() {
-
 	verbose := flag.Bool("v", false, "enable debug logging")
+	magicPath := flag.String("m", "./magic/Magdir", "magic file or directory")
+	mimeOnly := flag.Bool("i", false, "output MIME type strings")
+	brief := flag.Bool("b", false, "do not prepend filenames to output")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: magix [-v] [-b] [-i] [-m magic] file...\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 
 	var logger *slog.Logger
 	if *verbose {
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	} else {
-		logger = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	}
 
-	// 1. Point to your Magdir folder
-	m, err := libmagix.New("./magic/Magdir", logger)
+	m, err := libmagix.New(*magicPath, logger)
 	if err != nil {
-		fmt.Printf("Error loading magic files: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error loading magic files: %v\n", err)
 		os.Exit(1)
 	}
 
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: magix <file>")
-		return
-	}
-	// 2. Read file
-	remainingArgs := flag.Args()
-
-	filePath := remainingArgs[0]
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		fmt.Printf("Error reading file: %v\n", err)
-		return
+	files := flag.Args()
+	if len(files) == 0 {
+		flag.Usage()
+		os.Exit(1)
 	}
 
-	// 3. Identify!
-	result := m.Identify(data)
-	if result != nil {
-		fmt.Printf("File Type: %s (MIME: %s)\n", result.Message, result.Mime)
-	} else {
-		fmt.Println("File type not identified.")
+	status := 0
+	for _, filePath := range files {
+		data, err := os.ReadFile(filePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "magix: %s: %v\n", filePath, err)
+			status = 1
+			continue
+		}
+
+		prefix := ""
+		if !*brief {
+			prefix = filePath + ": "
+		}
+
+		result := m.Identify(data)
+		switch {
+		case *mimeOnly && result != nil && result.Mime != "":
+			fmt.Printf("%s%s\n", prefix, result.Mime)
+		case *mimeOnly:
+			fmt.Printf("%sapplication/octet-stream\n", prefix)
+		case result != nil && result.Message != "":
+			fmt.Printf("%s%s\n", prefix, result.Message)
+		default:
+			fmt.Printf("%sdata\n", prefix)
+		}
 	}
+	os.Exit(status)
 }

@@ -210,6 +210,7 @@ func matchByte(data []byte, r *Rule, offset int64) (bool, int64) {
 		actual &= r.Mask
 		expected &= r.Mask
 	}
+	actual = applyTypeOp(actual, r)
 
 	matched := compare(actual, expected, r.Operator)
 	if !matched {
@@ -230,6 +231,7 @@ func matchShortLE(data []byte, r *Rule, offset int64) (bool, int64) {
 		actual &= r.Mask
 		expected &= r.Mask
 	}
+	actual = applyTypeOp(actual, r)
 
 	matched := compare(actual, expected, r.Operator)
 	if !matched {
@@ -254,6 +256,7 @@ func matchShortBE(data []byte, r *Rule, offset int64) (bool, int64) {
 		actual = actual & r.Mask
 		expected = expected & r.Mask
 	}
+	actual = applyTypeOp(actual, r)
 
 	matched := compare(actual, expected, r.Operator)
 	if !matched {
@@ -277,6 +280,7 @@ func matchLongLE(data []byte, r *Rule, offset int64) (bool, int64) {
 		actual &= r.Mask
 		expected &= r.Mask
 	}
+	actual = applyTypeOp(actual, r)
 
 	matched := compare(actual, expected, r.Operator)
 	if !matched {
@@ -300,6 +304,7 @@ func matchLongBE(data []byte, r *Rule, offset int64) (bool, int64) {
 		actual &= r.Mask
 		expected &= r.Mask
 	}
+	actual = applyTypeOp(actual, r)
 
 	matched := compare(actual, expected, r.Operator)
 	if !matched {
@@ -351,6 +356,7 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 	if r.HasMask {
 		actual = actual & r.Mask
 	}
+	actual = applyTypeOp(actual, r)
 
 	expected := castToUint64(r.Value)
 
@@ -359,6 +365,153 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 		return false, offset
 	}
 	return true, offset + stride
+}
+
+// applyTypeOp divides or reduces the file value (uleshort/256, ulelong%256).
+func applyTypeOp(actual uint64, r *Rule) uint64 {
+	if r.TypeOpArg == 0 {
+		return actual
+	}
+	switch r.TypeOp {
+	case "/":
+		return actual / r.TypeOpArg
+	case "%":
+		return actual % r.TypeOpArg
+	default:
+		return actual
+	}
+}
+
+// extractedNumber reads a numeric field and applies the mask and type operator.
+func extractedNumber(data []byte, r *Rule, offset int64) (uint64, bool) {
+	if offset < 0 {
+		return 0, false
+	}
+	var actual uint64
+	switch r.Type {
+	case "byte", "ubyte":
+		if offset >= int64(len(data)) {
+			return 0, false
+		}
+		actual = uint64(data[offset])
+	case "leshort", "uleshort", "uint16":
+		if offset+2 > int64(len(data)) {
+			return 0, false
+		}
+		actual = uint64(binary.LittleEndian.Uint16(data[offset : offset+2]))
+	case "short", "beshort", "ubeshort":
+		if offset+2 > int64(len(data)) {
+			return 0, false
+		}
+		actual = uint64(binary.BigEndian.Uint16(data[offset : offset+2]))
+	case "lelong", "ulelong", "uint32":
+		if offset+4 > int64(len(data)) {
+			return 0, false
+		}
+		actual = uint64(binary.LittleEndian.Uint32(data[offset : offset+4]))
+	case "long", "belong", "ubelong":
+		if offset+4 > int64(len(data)) {
+			return 0, false
+		}
+		actual = uint64(binary.BigEndian.Uint32(data[offset : offset+4]))
+	case "lequad", "ulequad":
+		if offset+8 > int64(len(data)) {
+			return 0, false
+		}
+		actual = binary.LittleEndian.Uint64(data[offset : offset+8])
+	case "quad", "bequad", "ubequad":
+		if offset+8 > int64(len(data)) {
+			return 0, false
+		}
+		actual = binary.BigEndian.Uint64(data[offset : offset+8])
+	default:
+		return 0, false
+	}
+	if r.HasMask {
+		actual &= r.Mask
+	}
+	return applyTypeOp(actual, r), true
+}
+
+func pstringPayload(data []byte, r *Rule, offset int64) (string, bool) {
+	if offset < 0 || offset >= int64(len(data)) {
+		return "", false
+	}
+
+	var strLen int
+	var headerLen int64
+	switch r.PStringLengthType {
+	case "h":
+		if offset+2 > int64(len(data)) {
+			return "", false
+		}
+		strLen = int(binary.LittleEndian.Uint16(data[offset : offset+2]))
+		headerLen = 2
+	case "H":
+		if offset+2 > int64(len(data)) {
+			return "", false
+		}
+		strLen = int(binary.BigEndian.Uint16(data[offset : offset+2]))
+		headerLen = 2
+	case "l":
+		if offset+4 > int64(len(data)) {
+			return "", false
+		}
+		strLen = int(binary.LittleEndian.Uint32(data[offset : offset+4]))
+		headerLen = 4
+	case "L":
+		if offset+4 > int64(len(data)) {
+			return "", false
+		}
+		strLen = int(binary.BigEndian.Uint32(data[offset : offset+4]))
+		headerLen = 4
+	default:
+		strLen = int(data[offset])
+		headerLen = 1
+	}
+
+	dataStart := offset + headerLen
+	if dataStart > int64(len(data)) {
+		return "", false
+	}
+	if strLen > len(data)-int(dataStart) {
+		strLen = len(data) - int(dataStart)
+	}
+	if strLen < 0 {
+		return "", false
+	}
+	return string(data[dataStart : dataStart+int64(strLen)]), true
+}
+
+func readCString(data []byte, offset int64, max int) string {
+	if offset < 0 || offset >= int64(len(data)) || max <= 0 {
+		return ""
+	}
+	end := offset
+	limit := offset + int64(max)
+	if limit > int64(len(data)) {
+		limit = int64(len(data))
+	}
+	for end < limit && data[end] != 0 && data[end] != '\n' && data[end] != '\r' {
+		end++
+	}
+	return string(data[offset:end])
+}
+
+func readUTF16(data []byte, offset int64, order binary.ByteOrder) string {
+	if offset < 0 || offset+2 > int64(len(data)) {
+		return ""
+	}
+	var b strings.Builder
+	for offset+2 <= int64(len(data)) && b.Len() < 256 {
+		u := order.Uint16(data[offset : offset+2])
+		offset += 2
+		if u == 0 {
+			break
+		}
+		b.WriteRune(rune(u))
+	}
+	return b.String()
 }
 
 // compare handles the operators: =, !, >, <, &, ^

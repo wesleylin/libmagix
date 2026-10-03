@@ -31,8 +31,7 @@ func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 			return nil
 		}
 
-		// Open the magic file
-		fmt.Println("Loading magic file:", path)
+		p.logger.Debug("loading magic file", "path", path)
 		f, err := os.Open(path)
 		if err != nil {
 			return err
@@ -43,7 +42,7 @@ func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 		if err != nil {
 			// You might want to log the error and continue
 			// rather than stopping the whole app for one bad file
-			fmt.Printf("Error parsing file %s: %v\n", path, err)
+			p.logger.Warn("skipping magic file", "path", path, "err", err)
 			return nil
 		}
 

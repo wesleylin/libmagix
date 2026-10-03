@@ -25,6 +25,7 @@ type Rule struct {
 	IsIndirect    bool
 	PointerOffset int64
 	PointerType   string
+	PointerOp     string // "+", "-", "*", "/", "%", "&", "|", "^"; empty means add
 	PointerAdd    int64
 
 	SearchRange int64
@@ -38,6 +39,11 @@ type Rule struct {
 
 	// Indirect Offset Adjustment: (offset.type+adj)
 	PointerAdjustment int64
+
+	// Numeric type operator applied to the file value before compare and print.
+	// "uleshort/256" divides; "uleshort%256" takes the remainder.
+	TypeOp    string
+	TypeOpArg uint64
 }
 
 func (r Rule) String() string {
@@ -54,34 +60,91 @@ func (r Rule) String() string {
 // It takes a baseOffset (the match location of the parent rule) to support relative offsets.
 // It returns whether it matched and the absolute offset where the match occurred.
 func (r *Rule) Match(data []byte, baseOffset int64, forcedRelative bool) (bool, int64) {
+	matched, offset, _ := r.MatchValue(data, baseOffset, forcedRelative)
+	return matched, offset
+}
+
+// MatchValue checks this rule and returns the value libmagic would print
+// with a printf conversion in the description.
+func (r *Rule) MatchValue(data []byte, baseOffset int64, forcedRelative bool) (bool, int64, any) {
 	// 1. Resolve the actual offset (handling relative and indirect offsets)
 	actualOffset, _ := r.resolveOffset(data, baseOffset, forcedRelative)
 
 	// Handle Meta-types
 	if r.Type == "name" {
-		return false, 0 // Declarations don't match data
+		return false, 0, nil // Declarations don't match data
 	}
 	if r.Type == "use" {
 		// 'use' calls always "match" to trigger the jump,
 		// and they always use the current baseOffset.
-		return true, actualOffset
+		return true, actualOffset, nil
 	}
 
 	// 2. MatchAny 'x' (always matches if within bounds)
 	if r.MatchAny {
 		if actualOffset < 0 || actualOffset >= int64(len(data)) {
-			return false, 0
+			return false, 0, nil
 		}
-		return true, actualOffset
+		return true, actualOffset, r.printable(data, actualOffset)
 	}
 
 	// 3. Delegate to type-specific handlers using registry lookup
 	handler, found := handlerMap[r.Type]
+	var matched bool
+	var end int64
 	if !found {
-		// Default to numeric handling for unknown types
-		return matchNumericHandler(data, r, actualOffset)
+		matched, end = matchNumericHandler(data, r, actualOffset)
+	} else {
+		matched, end = handler(data, r, actualOffset)
 	}
-	return handler(data, r, actualOffset)
+	if !matched {
+		return false, end, nil
+	}
+	return true, end, r.printable(data, actualOffset)
+}
+
+// printable is the value substituted into a description format string.
+// Equality tests print the pattern; 'x', '>', and '<' print the bytes from the file.
+func (r *Rule) printable(data []byte, start int64) any {
+	printPattern := !r.MatchAny && (r.Operator == "=" || r.Operator == "!")
+	switch r.Type {
+	case "string", "search":
+		if printPattern {
+			if s, ok := r.Value.(string); ok {
+				return s
+			}
+		}
+		return readCString(data, start, 256)
+	case "pstring":
+		if s, ok := pstringPayload(data, r, start); ok {
+			if printPattern {
+				if exp, ok := r.Value.(string); ok {
+					return exp
+				}
+			}
+			return s
+		}
+		return ""
+	case "lestring16":
+		if printPattern {
+			if s, ok := r.Value.(string); ok {
+				return s
+			}
+		}
+		return readUTF16(data, start, binary.LittleEndian)
+	case "bestring16":
+		if printPattern {
+			if s, ok := r.Value.(string); ok {
+				return s
+			}
+		}
+		return readUTF16(data, start, binary.BigEndian)
+	default:
+		if n, ok := extractedNumber(data, r, start); ok {
+			return n
+		}
+	}
+	return nil
 }
 
 // getHandler retrieves the handler function for a given type from the registry.
@@ -155,10 +218,40 @@ func (r *Rule) resolveOffset(data []byte, baseOffset int64, forcedRelative bool)
 			}
 			pointerVal = int64(binary.BigEndian.Uint32(data[ptrOff : ptrOff+4]))
 		}
-		actualOffset = pointerVal + r.PointerAdd + r.PointerAdjustment
+		actualOffset = applyPointerOp(pointerVal, r.PointerOp, r.PointerAdjustment) + r.PointerAdd
 	}
 
 	return actualOffset, true
+}
+
+// applyPointerOp applies the operator inside an indirect offset, such as (48.l*4096).
+func applyPointerOp(val int64, op string, arg int64) int64 {
+	switch op {
+	case "", "+":
+		return val + arg
+	case "-":
+		return val - arg
+	case "*":
+		return val * arg
+	case "/":
+		if arg == 0 {
+			return 0
+		}
+		return val / arg
+	case "%":
+		if arg == 0 {
+			return 0
+		}
+		return val % arg
+	case "&":
+		return val & arg
+	case "|":
+		return val | arg
+	case "^":
+		return val ^ arg
+	default:
+		return val + arg
+	}
 }
 
 // MatchByte checks if this rule matches byte-level data (for ValueRaw or Value when it's []byte)

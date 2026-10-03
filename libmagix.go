@@ -69,11 +69,11 @@ func New(magicPath string, logger *slog.Logger) (*Magix, error) {
 // Identify takes file bytes and returns a Result containing the full, concatenated description.
 func (m *Magix) Identify(data []byte) *Result {
 	for i := range m.rules {
-		if matched, matchedOffset := m.rules[i].Match(data, 0, false); matched {
+		if matched, matchedOffset, val := m.rules[i].MatchValue(data, 0, false); matched {
 			var fullMsg strings.Builder
 			var lastMime string
 
-			m.identifyRecursive(data, &m.rules[i], matchedOffset, &fullMsg, &lastMime)
+			m.identifyRecursive(data, &m.rules[i], matchedOffset, val, &fullMsg, &lastMime)
 
 			return &Result{
 				Message: strings.TrimSpace(fullMsg.String()),
@@ -84,7 +84,7 @@ func (m *Magix) Identify(data []byte) *Result {
 	return nil
 }
 
-func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset int64, fullMsg *strings.Builder, lastMime *string) {
+func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset int64, val any, fullMsg *strings.Builder, lastMime *string) {
 	if r.Type == "use" {
 		name, ok := r.Value.(string)
 		if ok {
@@ -92,8 +92,8 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset i
 				// Execute all children of the named block using the current lastMatchOffset
 				// IMPORTANT: Rules inside a subroutine are forced to be relative to the 'use' offset
 				for i := range subRule.Children {
-					if matched, matchedOffset := subRule.Children[i].Match(data, lastMatchOffset, true); matched {
-						m.identifyRecursive(data, &subRule.Children[i], matchedOffset, fullMsg, lastMime)
+					if matched, matchedOffset, childVal := subRule.Children[i].MatchValue(data, lastMatchOffset, true); matched {
+						m.identifyRecursive(data, &subRule.Children[i], matchedOffset, childVal, fullMsg, lastMime)
 					}
 				}
 			}
@@ -101,7 +101,7 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset i
 		return
 	}
 
-	msg := r.Message
+	msg := parser.FormatMessage(r.Message, r.Type, val)
 	if r.Mime != "" {
 		*lastMime = r.Mime
 	}
@@ -121,8 +121,8 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset i
 	// Try all children. In libmagic, multiple children at the same level can match.
 	for i := range r.Children {
 		// Relative rules (&) use the lastMatchOffset
-		if matched, matchedOffset := r.Children[i].Match(data, lastMatchOffset, false); matched {
-			m.identifyRecursive(data, &r.Children[i], matchedOffset, fullMsg, lastMime)
+		if matched, matchedOffset, childVal := r.Children[i].MatchValue(data, lastMatchOffset, false); matched {
+			m.identifyRecursive(data, &r.Children[i], matchedOffset, childVal, fullMsg, lastMime)
 		}
 	}
 }

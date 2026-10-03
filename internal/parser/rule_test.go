@@ -297,3 +297,24 @@ func TestRule_ResolveOffset_IndirectAdjustment(t *testing.T) {
 		t.Errorf("resolveOffset() = %v, want 16", gotOffset)
 	}
 }
+
+func TestRule_ResolveOffset_IndirectMultiply(t *testing.T) {
+	rule := Rule{
+		IsIndirect:        true,
+		PointerOffset:     48,
+		PointerType:       "l",
+		PointerOp:         "*",
+		PointerAdjustment: 4096,
+	}
+
+	data := make([]byte, 52)
+	binary.LittleEndian.PutUint32(data[48:52], 3)
+
+	gotOffset, ok := rule.resolveOffset(data, 0, false)
+	if !ok {
+		t.Fatal("resolveOffset failed")
+	}
+	if gotOffset != 3*4096 {
+		t.Errorf("resolveOffset() = %v, want %v", gotOffset, 3*4096)
+	}
+}

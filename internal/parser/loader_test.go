@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
@@ -63,5 +64,21 @@ func TestLoadDirectory(t *testing.T) {
 
 	if !foundChild {
 		t.Error("failed to find Zip rule with children")
+	}
+}
+
+func TestBundledMagicParses(t *testing.T) {
+	matches, err := filepath.Glob("../../magic/Magdir/*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) == 0 {
+		t.Fatal("no bundled magic files found")
+	}
+	p := NewParser(slog.New(slog.DiscardHandler))
+	for _, path := range matches {
+		if _, err := p.LoadFile(path); err != nil {
+			t.Errorf("%s: %v", filepath.Base(path), err)
+		}
 	}
 }

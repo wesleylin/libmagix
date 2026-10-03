@@ -382,20 +382,53 @@ func TestStarOfficeIdentification(t *testing.T) {
 	// Identify
 	got := engine.Identify(data)
 
-	// Note: Currently we haven't implemented printf formatting, 
-	// so it will literally show "%s" and "%u" in the output for now.
 	// 630: "StarOffice Gallery theme"
-	// 636: " %s"
-	// 638: ", %u object" (from \b, %u object)
-	// 640: (skipped because ulelong is 1, and rule is !1)
-	// 642: (matches >0)
-	// 644: ", 1st %s" (from \b, 1st %s)
-	want := "StarOffice Gallery theme %s, %u object, 1st %s"
+	// 636: gallery name "MyName"
+	// 638: ", 1 object"
+	// 640: plural skipped because the count is 1
+	// 644: first object name is 0x20, 'O', 'b'
+	want := "StarOffice Gallery theme MyName, 1 object, 1st  Ob"
 
 	if got == nil {
 		t.Fatal("Expected identification, got nil")
 	}
 	if got.Message != want {
 		t.Errorf("Got %q, want %q", got.Message, want)
+	}
+}
+
+func TestDescriptionFormatting(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	identify := func(magic string, data []byte) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "formatted")
+		if err := os.WriteFile(path, []byte(magic), 0644); err != nil {
+			t.Fatalf("Failed to write mock magic file: %v", err)
+		}
+		engine, err := libmagix.New(path, logger)
+		if err != nil {
+			t.Fatalf("Failed to initialize engine: %v", err)
+		}
+		got := engine.Identify(data)
+		if got == nil {
+			t.Fatal("Identify() = nil")
+		}
+		return got.Message
+	}
+
+	count := make([]byte, 4)
+	binary.LittleEndian.PutUint32(count, 42)
+	if got := identify("0\tulelong\tx\tcount %u\n", count); got != "count 42" {
+		t.Errorf("count = %q, want %q", got, "count 42")
+	}
+
+	// 0x0201 / 256 == 2
+	if got := identify("0\tuleshort/256\tx\tversion %u\n", []byte{0x01, 0x02}); got != "version 2" {
+		t.Errorf("version = %q, want %q", got, "version 2")
+	}
+
+	if got := identify("0\tstring\tx\tlabel %s\n", []byte("hello\x00")); got != "label hello" {
+		t.Errorf("label = %q, want %q", got, "label hello")
 	}
 }

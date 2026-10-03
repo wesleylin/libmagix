@@ -96,6 +96,7 @@ func TestParseLine(t *testing.T) {
 				IsIndirect:        true,
 				PointerOffset:     2,
 				PointerType:       "s",
+				PointerOp:         "+",
 				PointerAdjustment: 11,
 				Type:              "pstring",
 				PStringLengthType: "h",

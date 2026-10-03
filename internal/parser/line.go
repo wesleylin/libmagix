@@ -34,7 +34,7 @@ func ParseLine(line string) (*Rule, error) {
 		offsetPart = offsetPart[1:]
 	}
 
-	offset, isIndirect, ptrOff, ptrType, ptrAdd, err := parseOffset(offsetPart)
+	offset, isIndirect, ptrOff, ptrType, ptrOp, ptrArg, outerAdd, err := parseOffset(offsetPart)
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +59,7 @@ func ParseLine(line string) (*Rule, error) {
 	if err != nil {
 		return nil, err
 	}
+	typeStr, typeOp, typeOpArg := splitNumericOp(typeStr)
 	op, cleanValueStr := parseOperator(rawValue)
 
 	matchAny := false
@@ -96,19 +97,55 @@ func ParseLine(line string) (*Rule, error) {
 		Message:  message,
 		MatchAny: matchAny,
 
-		IsIndirect:    isIndirect,
-		PointerOffset: ptrOff,
-		PointerType:   ptrType,
-		PointerAdd:    0, // We'll use PointerAdjustment for fixed additions
-		PointerAdjustment: ptrAdd,
+		IsIndirect:        isIndirect,
+		PointerOffset:     ptrOff,
+		PointerType:       ptrType,
+		PointerOp:         ptrOp,
+		PointerAdd:        outerAdd,
+		PointerAdjustment: ptrArg,
 
 		SearchRange:       searchRange,
 		PStringLengthType: pstringLenType,
 		IsRelative:        isRelative,
+		TypeOp:            typeOp,
+		TypeOpArg:         typeOpArg,
 	}, nil
 }
 
-func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrType string, ptrAdd int64, err error) {
+// splitNumericOp parses "uleshort/256" and "uleshort%256".
+// String flags such as "string/c" are left unchanged.
+func splitNumericOp(typeStr string) (string, string, uint64) {
+	for _, op := range []string{"/", "%"} {
+		idx := strings.Index(typeStr, op)
+		if idx <= 0 {
+			continue
+		}
+		base := typeStr[:idx]
+		if !isNumericType(base) {
+			continue
+		}
+		arg, err := strconv.ParseUint(typeStr[idx+1:], 0, 64)
+		if err != nil || arg == 0 {
+			continue
+		}
+		return base, op, arg
+	}
+	return typeStr, "", 0
+}
+
+func isNumericType(typeStr string) bool {
+	switch typeStr {
+	case "byte", "ubyte",
+		"short", "beshort", "leshort", "ubeshort", "uleshort", "uint16",
+		"long", "belong", "lelong", "ubelong", "ulelong", "uint32",
+		"quad", "bequad", "lequad", "ubequad", "ulequad":
+		return true
+	default:
+		return false
+	}
+}
+
+func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrType string, ptrOp string, ptrArg int64, outerAdd int64, err error) {
 	start := strings.Index(raw, "(")
 	end := strings.LastIndex(raw, ")")
 
@@ -147,7 +184,13 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 
 	if len(typeAndInnerAdd) > 1 {
 		innerAdj := typeAndInnerAdd[1:]
-		ptrAdd, err = strconv.ParseInt(innerAdj, 0, 64)
+		if innerAdj != "" && strings.ContainsRune("+-*/%&|^", rune(innerAdj[0])) {
+			ptrOp = innerAdj[:1]
+			innerAdj = innerAdj[1:]
+		} else {
+			ptrOp = "+"
+		}
+		ptrArg, err = strconv.ParseInt(innerAdj, 0, 64)
 		if err != nil {
 			err = fmt.Errorf("invalid inner pointer adjustment: %v", err)
 			return
@@ -156,12 +199,11 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 
 	// 2. Handle adjustment outside parens (e.g. (0x3c.l)+4)
 	if adjPart != "" {
-		outerAdj, err2 := strconv.ParseInt(adjPart, 0, 64)
-		if err2 != nil {
-			err = fmt.Errorf("invalid outer pointer adjustment: %v", err2)
+		outerAdd, err = strconv.ParseInt(adjPart, 0, 64)
+		if err != nil {
+			err = fmt.Errorf("invalid outer pointer adjustment: %v", err)
 			return
 		}
-		ptrAdd += outerAdj
 	}
 
 	// 3. Handle base offset (if any before parenthesis)
