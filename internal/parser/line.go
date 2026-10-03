@@ -142,7 +142,9 @@ func isNumericType(typeStr string) bool {
 	case "byte", "ubyte",
 		"short", "beshort", "leshort", "ubeshort", "uleshort", "uint16",
 		"long", "belong", "lelong", "ubelong", "ulelong", "uint32",
-		"quad", "bequad", "lequad", "ubequad", "ulequad":
+		"quad", "bequad", "lequad", "ubequad", "ulequad",
+		"date", "ldate", "bedate", "beldate", "ledate", "leldate", "medate", "meldate",
+		"qdate", "lqdate", "beqdate", "beqldate", "leqdate", "leqldate":
 		return true
 	default:
 		return false
@@ -337,12 +339,20 @@ func parseTypeValue(typeStr string, valueStr string) (any, error) {
 		}
 		return uint8(val), nil
 
-	case "quad", "bequad", "lequad", "ubequad", "ulequad":
+	case "quad", "bequad", "lequad", "ubequad", "ulequad",
+		"qdate", "lqdate", "beqdate", "beqldate", "leqdate", "leqldate":
 		val, err := parseMagicUint(valueStr, 64)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
 		}
 		return val, nil
+
+	case "date", "ldate", "bedate", "beldate", "ledate", "leldate", "medate", "meldate":
+		val, err := parseMagicUint(valueStr, 32)
+		if err != nil {
+			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
+		}
+		return uint32(val), nil
 
 	case "name", "use":
 		return valueStr, nil

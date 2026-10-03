@@ -1,6 +1,9 @@
 package parser
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestFormatMessage(t *testing.T) {
 	tests := []struct {
@@ -65,6 +68,20 @@ func TestFormatMessage(t *testing.T) {
 			typeName: "pstring",
 			value:    "A\x01B",
 			want:     `name A\001B`,
+		},
+		{
+			name:     "utc bedate",
+			message:  "Created %s",
+			typeName: "bedate",
+			value:    uint64(time.Date(1993, time.May, 21, 5, 20, 0, 0, time.UTC).Unix()),
+			want:     "Created Fri May 21 05:20:00 1993",
+		},
+		{
+			name:     "utc bedate single digit day",
+			message:  "Created %s",
+			typeName: "bedate",
+			value:    uint64(time.Date(1997, time.April, 7, 22, 23, 1, 0, time.UTC).Unix()),
+			want:     "Created Mon Apr  7 22:23:01 1997",
 		},
 		{
 			name:     "no conversion",

@@ -358,12 +358,48 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 		}
 		actual = uint64(binary.BigEndian.Uint32(data[offset : offset+4]))
 		stride = 4
-	case "lelong", "ulelong": // Little Endian 4 bytes
+	case "lelong", "ulelong", "ledate", "leldate":
 		if offset+4 > int64(len(data)) {
 			return false, 0
 		}
 		actual = uint64(binary.LittleEndian.Uint32(data[offset : offset+4]))
 		stride = 4
+	case "bedate", "beldate":
+		if offset+4 > int64(len(data)) {
+			return false, 0
+		}
+		actual = uint64(binary.BigEndian.Uint32(data[offset : offset+4]))
+		stride = 4
+	case "medate", "meldate":
+		if offset+4 > int64(len(data)) {
+			return false, 0
+		}
+		actual = readMiddleEndian(data[offset : offset+4])
+		stride = 4
+	case "date", "ldate":
+		if offset+4 > int64(len(data)) {
+			return false, 0
+		}
+		actual = uint64(binary.NativeEndian.Uint32(data[offset : offset+4]))
+		stride = 4
+	case "leqdate", "leqldate":
+		if offset+8 > int64(len(data)) {
+			return false, 0
+		}
+		actual = binary.LittleEndian.Uint64(data[offset : offset+8])
+		stride = 8
+	case "beqdate", "beqldate":
+		if offset+8 > int64(len(data)) {
+			return false, 0
+		}
+		actual = binary.BigEndian.Uint64(data[offset : offset+8])
+		stride = 8
+	case "qdate", "lqdate":
+		if offset+8 > int64(len(data)) {
+			return false, 0
+		}
+		actual = binary.NativeEndian.Uint64(data[offset : offset+8])
+		stride = 8
 	case "short", "beshort", "ubeshort": // Big Endian 2 bytes
 		if offset+2 > int64(len(data)) {
 			return false, 0
@@ -446,6 +482,12 @@ func matchQuad(data []byte, r *Rule, offset int64, order binary.ByteOrder) (bool
 	return true, offset + 8
 }
 
+// readMiddleEndian decodes a PDP-11 long: the two little-endian halves are swapped.
+func readMiddleEndian(b []byte) uint64 {
+	le := binary.LittleEndian.Uint32(b)
+	return uint64((le&0xffff)<<16 | (le >> 16))
+}
+
 // applyTypeOp divides or reduces the file value (uleshort/256, ulelong%256).
 func applyTypeOp(actual uint64, r *Rule) uint64 {
 	if r.TypeOpArg == 0 {
@@ -483,11 +525,41 @@ func extractedNumber(data []byte, r *Rule, offset int64) (uint64, bool) {
 			return 0, false
 		}
 		actual = uint64(binary.BigEndian.Uint16(data[offset : offset+2]))
-	case "lelong", "ulelong", "uint32":
+	case "lelong", "ulelong", "uint32", "ledate", "leldate":
 		if offset+4 > int64(len(data)) {
 			return 0, false
 		}
 		actual = uint64(binary.LittleEndian.Uint32(data[offset : offset+4]))
+	case "bedate", "beldate":
+		if offset+4 > int64(len(data)) {
+			return 0, false
+		}
+		actual = uint64(binary.BigEndian.Uint32(data[offset : offset+4]))
+	case "medate", "meldate":
+		if offset+4 > int64(len(data)) {
+			return 0, false
+		}
+		actual = readMiddleEndian(data[offset : offset+4])
+	case "date", "ldate":
+		if offset+4 > int64(len(data)) {
+			return 0, false
+		}
+		actual = uint64(binary.NativeEndian.Uint32(data[offset : offset+4]))
+	case "leqdate", "leqldate":
+		if offset+8 > int64(len(data)) {
+			return 0, false
+		}
+		actual = binary.LittleEndian.Uint64(data[offset : offset+8])
+	case "beqdate", "beqldate":
+		if offset+8 > int64(len(data)) {
+			return 0, false
+		}
+		actual = binary.BigEndian.Uint64(data[offset : offset+8])
+	case "qdate", "lqdate":
+		if offset+8 > int64(len(data)) {
+			return 0, false
+		}
+		actual = binary.NativeEndian.Uint64(data[offset : offset+8])
 	case "long", "belong", "ubelong":
 		if offset+4 > int64(len(data)) {
 			return 0, false

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // FormatMessage substitutes the matched value into a magic description.
@@ -65,6 +66,9 @@ func renderSpec(spec, typeName string, value any) string {
 	verb := spec[len(spec)-1]
 	switch verb {
 	case 's':
+		if formatted, ok := formatTimestamp(typeName, value); ok {
+			return formatString(spec, formatted)
+		}
 		return formatString(spec, coerceString(value))
 	case 'c':
 		n, ok := coerceUint(value)
@@ -81,6 +85,49 @@ func renderSpec(spec, typeName string, value any) string {
 	default:
 		return spec
 	}
+}
+
+func isTimestamp(typeName string) bool {
+	switch typeName {
+	case "date", "ldate", "bedate", "beldate", "ledate", "leldate", "medate", "meldate",
+		"qdate", "lqdate", "beqdate", "beqldate", "leqdate", "leqldate":
+		return true
+	default:
+		return false
+	}
+}
+
+func isLocalTimestamp(typeName string) bool {
+	switch typeName {
+	case "ldate", "beldate", "leldate", "meldate", "lqdate", "beqldate", "leqldate":
+		return true
+	default:
+		return false
+	}
+}
+
+// formatTimestamp prints a Unix time the way file's asctime does.
+// Types without an "l" are UTC. The "l" types are local time.
+func formatTimestamp(typeName string, value any) (string, bool) {
+	if !isTimestamp(typeName) {
+		return "", false
+	}
+	n, ok := coerceUint(value)
+	if !ok {
+		return "", false
+	}
+	sec := int64(n)
+	switch typeName {
+	case "date", "ldate", "bedate", "beldate", "ledate", "leldate", "medate", "meldate":
+		sec = int64(uint32(n))
+	}
+	when := time.Unix(sec, 0)
+	if isLocalTimestamp(typeName) {
+		when = when.In(time.Local)
+	} else {
+		when = when.UTC()
+	}
+	return when.Format("Mon Jan _2 15:04:05 2006"), true
 }
 
 func formatString(spec, s string) string {

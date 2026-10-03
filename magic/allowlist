@@ -34,3 +34,7 @@ rpm
 rtf
 uf2
 windows
+# Date descriptions. pgp-binary-keys prints the OpenPGP version and
+# creation time; the trailing packet summary is still short.
+pgp-binary-keys
+xilinx

@@ -133,6 +133,16 @@ func TestMatchString(t *testing.T) {
 	}
 }
 
+func TestMatchBedate(t *testing.T) {
+	// Fri May 21 05:20:00 1993 UTC, big-endian.
+	data := []byte{0x2b, 0xfc, 0x66, 0x80}
+	rule := Rule{Type: "bedate", Operator: ">", Value: uint32(631156147)}
+	ok, end := matchNumericHandler(data, &rule, 0)
+	if !ok || end != 4 {
+		t.Fatalf("matchNumericHandler() = %v, %d", ok, end)
+	}
+}
+
 func TestMatchPString(t *testing.T) {
 	tests := []struct {
 		name       string
