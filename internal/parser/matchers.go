@@ -105,14 +105,14 @@ func matchPString(data []byte, r *Rule, offset int64) (bool, int64) {
 
 	actualStr := data[dataStart : dataStart+int64(strLen)]
 	expectedVal, ok := r.Value.(string)
-	if !ok {
-		// Invalid type - still return match but skip comparison
-		return true, dataStart + int64(strLen)
-	}
-
-	// Empty string matches anywhere in the available data
-	if expectedVal == "" && len(actualStr) >= 0 {
-		return true, dataStart
+	if !ok || r.MatchAny || expectedVal == "" {
+		// 'x' leaves the offset on the first NUL or newline, where file's
+		// strlen stops, so a following "&1" sees the next field key.
+		n := bytes.IndexAny(actualStr, "\x00\r\n")
+		if n < 0 {
+			n = len(actualStr)
+		}
+		return true, dataStart + int64(n)
 	}
 
 	if strings.Contains(string(actualStr), expectedVal) {
@@ -204,8 +204,13 @@ func matchSearch(data []byte, r *Rule, offset int64) (bool, int64) {
 	pattern := []byte(valStr)
 	maxSearchEnd := int64(len(data))
 
-	if r.SearchRange > 0 && offset+r.SearchRange < maxSearchEnd {
-		maxSearchEnd = offset + r.SearchRange
+	// The range counts starting positions. The pattern may extend past it,
+	// which is why search/1 can match a string longer than one byte.
+	if r.SearchRange > 0 {
+		end := offset + r.SearchRange + int64(len(pattern)) - 1
+		if end < maxSearchEnd {
+			maxSearchEnd = end
+		}
 	}
 
 	if offset > maxSearchEnd {
@@ -213,18 +218,24 @@ func matchSearch(data []byte, r *Rule, offset int64) (bool, int64) {
 	}
 
 	idx := bytes.Index(data[offset:maxSearchEnd], pattern)
-	if idx == -1 {
+	if idx == -1 || (r.SearchRange > 0 && int64(idx) >= r.SearchRange) {
 		return false, 0
 	}
 	// Continuations are relative to the end of the match unless /s is set.
+	if r.OffsetAtStart {
+		return true, offset + int64(idx)
+	}
 	return true, offset + int64(idx) + int64(len(pattern))
 }
 
 // matchRegex matches an extended regular expression within a bounded window.
 func matchRegex(data []byte, r *Rule, offset int64) (bool, int64) {
-	_, end, ok := findRegex(data, r, offset)
+	_, start, end, ok := findRegex(data, r, offset)
 	if !ok {
 		return false, 0
+	}
+	if r.OffsetAtStart {
+		return true, start
 	}
 	return true, end
 }
@@ -433,10 +444,10 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 	return true, offset + stride
 }
 
-func findRegex(data []byte, r *Rule, offset int64) (string, int64, bool) {
+func findRegex(data []byte, r *Rule, offset int64) (string, int64, int64, bool) {
 	pat, ok := r.Value.(string)
 	if !ok || offset < 0 || offset > int64(len(data)) {
-		return "", 0, false
+		return "", 0, 0, false
 	}
 	limit := int64(8192)
 	if r.SearchRange > 0 {
@@ -448,13 +459,26 @@ func findRegex(data []byte, r *Rule, offset int64) (string, int64, bool) {
 	}
 	re, err := regexp.Compile(pat)
 	if err != nil {
-		return "", 0, false
+		return "", 0, 0, false
 	}
 	loc := re.FindIndex(data[offset:end])
 	if loc == nil {
-		return "", 0, false
+		return "", 0, 0, false
 	}
-	return string(data[offset+int64(loc[0]) : offset+int64(loc[1])]), offset + int64(loc[1]), true
+	start := offset + int64(loc[0])
+	matchEnd := offset + int64(loc[1])
+	return string(data[start:matchEnd]), start, matchEnd, true
+}
+
+func matchGUID(data []byte, r *Rule, offset int64) (bool, int64) {
+	expected, ok := r.Value.(string)
+	if !ok || offset < 0 || offset+16 > int64(len(data)) {
+		return false, 0
+	}
+	if string(data[offset:offset+16]) != expected {
+		return false, offset
+	}
+	return true, offset + 16
 }
 
 func matchQuadLE(data []byte, r *Rule, offset int64) (bool, int64) {
@@ -498,6 +522,13 @@ func applyTypeOp(actual uint64, r *Rule) uint64 {
 		return actual / r.TypeOpArg
 	case "%":
 		return actual % r.TypeOpArg
+	case "+":
+		return actual + r.TypeOpArg
+	case "-":
+		if actual < r.TypeOpArg {
+			return 0
+		}
+		return actual - r.TypeOpArg
 	default:
 		return actual
 	}

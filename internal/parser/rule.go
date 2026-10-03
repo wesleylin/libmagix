@@ -32,7 +32,10 @@ type Rule struct {
 	PointerRelative bool
 
 	SearchRange int64
-	IsRelative  bool // Support for '&' relative offset
+	// OffsetAtStart is the /s flag on search and regex. Continuations
+	// use the start of the match. Without it they use the end.
+	OffsetAtStart bool
+	IsRelative    bool // Support for '&' relative offset
 
 	Children []Rule
 	RuleName string // For 'name' blocks
@@ -44,7 +47,8 @@ type Rule struct {
 	PointerAdjustment int64
 
 	// Numeric type operator applied to the file value before compare and print.
-	// "uleshort/256" divides; "uleshort%256" takes the remainder.
+	// "uleshort/256" divides, "uleshort%256" takes the remainder,
+	// and "leldate+631065600" shifts the value.
 	TypeOp    string
 	TypeOpArg uint64
 }
@@ -89,6 +93,20 @@ func (r *Rule) MatchValue(data []byte, baseOffset int64, forcedRelative bool) (b
 		if actualOffset < 0 || actualOffset >= int64(len(data)) {
 			return false, 0, nil
 		}
+		if r.Type == "pstring" {
+			ok, end := matchPString(data, r, actualOffset)
+			if !ok {
+				return false, 0, nil
+			}
+			return true, end, r.printable(data, actualOffset)
+		}
+		if isNumericType(r.Type) {
+			n, ok := extractedNumber(data, r, actualOffset)
+			if !ok {
+				return false, 0, nil
+			}
+			return true, actualOffset, n
+		}
 		return true, actualOffset, r.printable(data, actualOffset)
 	}
 
@@ -126,11 +144,14 @@ func (r *Rule) printable(data []byte, start int64) any {
 					return exp
 				}
 			}
+			if i := strings.IndexByte(s, 0); i >= 0 {
+				s = s[:i]
+			}
 			return s
 		}
 		return ""
 	case "regex":
-		if s, _, ok := findRegex(data, r, start); ok {
+		if s, _, _, ok := findRegex(data, r, start); ok {
 			return s
 		}
 		return ""
@@ -186,6 +207,7 @@ var handlerMap = map[string]Handler{
 	"lequad":     matchQuadLE,
 	"ubequad":    matchQuadBE,
 	"ulequad":    matchQuadLE,
+	"guid":       matchGUID,
 }
 
 // resolveOffset calculates the final absolute offset, handling relative (&) and indirect ((...)) syntax.
@@ -232,9 +254,30 @@ func (r *Rule) resolveOffset(data []byte, baseOffset int64, forcedRelative bool)
 				return 0, false
 			}
 			pointerVal = int64(binary.BigEndian.Uint32(data[ptrOff : ptrOff+4]))
+		case "I": // ID3 synchsafe integer, 7 bits per byte
+			if ptrOff+4 > int64(len(data)) {
+				return 0, false
+			}
+			b0 := int64(data[ptrOff] & 0x7f)
+			b1 := int64(data[ptrOff+1] & 0x7f)
+			b2 := int64(data[ptrOff+2] & 0x7f)
+			b3 := int64(data[ptrOff+3] & 0x7f)
+			pointerVal = b0<<21 | b1<<14 | b2<<7 | b3
+		case "q": // little-endian quad
+			if ptrOff+8 > int64(len(data)) {
+				return 0, false
+			}
+			pointerVal = int64(binary.LittleEndian.Uint64(data[ptrOff : ptrOff+8]))
+		case "Q": // big-endian quad
+			if ptrOff+8 > int64(len(data)) {
+				return 0, false
+			}
+			pointerVal = int64(binary.BigEndian.Uint64(data[ptrOff : ptrOff+8]))
 		}
 		actualOffset = applyPointerOp(pointerVal, r.PointerOp, r.PointerAdjustment) + r.PointerAdd
-		if r.PointerRelative {
+		// A leading '&' or an '&' inside the parentheses makes the indirect
+		// value a displacement from the current offset.
+		if r.PointerRelative || r.IsRelative {
 			actualOffset += baseOffset
 		}
 	}

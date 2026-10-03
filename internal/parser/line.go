@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -46,17 +47,7 @@ func ParseLine(line string) (*Rule, error) {
 	rawType := parts[1]
 	rawValue := parts[2]
 
-	var searchRange int64
-	var pstringLenType string
-	if strings.HasPrefix(rawType, "search") && strings.Contains(rawType, "/") {
-		tParts := strings.SplitN(rawType, "/", 2)
-		rawType = tParts[0]
-		searchRange, _ = strconv.ParseInt(tParts[1], 0, 64)
-	} else if strings.HasPrefix(rawType, "pstring") && strings.Contains(rawType, "/") {
-		tParts := strings.SplitN(rawType, "/", 2)
-		rawType = tParts[0]
-		pstringLenType = tParts[1]
-	}
+	rawType, searchRange, pstringLenType, offsetAtStart := parseStringModifiers(rawType)
 
 	// parsing for mask and hashmask
 	typeStr, mask, hasMask, err := parseTypeAndMask(rawType)
@@ -109,6 +100,7 @@ func ParseLine(line string) (*Rule, error) {
 		PointerAdjustment: ptrArg,
 
 		SearchRange:       searchRange,
+		OffsetAtStart:     offsetAtStart,
 		PStringLengthType: pstringLenType,
 		IsRelative:        isRelative,
 		PointerRelative:   ptrRelative,
@@ -117,10 +109,59 @@ func ParseLine(line string) (*Rule, error) {
 	}, nil
 }
 
-// splitNumericOp parses "uleshort/256" and "uleshort%256".
+// parseStringModifiers splits "search/1", "regex/4s", "string/b", and "pstring/H".
+// A leading number is the search window. 's' makes continuations relative to
+// the start of the match. Pascal-string length letters select the length field.
+func parseStringModifiers(raw string) (typeStr string, searchRange int64, pstringLen string, offsetAtStart bool) {
+	typeStr = raw
+	slash := strings.IndexByte(raw, '/')
+	if slash <= 0 {
+		return
+	}
+	switch raw[:slash] {
+	case "string", "search", "regex", "pstring":
+	default:
+		return
+	}
+	typeStr = raw[:slash]
+	rest := raw[slash+1:]
+	for i := 0; i < len(rest); {
+		if rest[i] == '/' {
+			i++
+			continue
+		}
+		if rest[i] >= '0' && rest[i] <= '9' {
+			j := i + 1
+			for j < len(rest) && rest[j] >= '0' && rest[j] <= '9' {
+				j++
+			}
+			if rest[i] == '0' && i+1 < len(rest) && (rest[i+1] == 'x' || rest[i+1] == 'X') {
+				j = i + 2
+				for j < len(rest) && isHex(rest[j]) {
+					j++
+				}
+			}
+			if n, err := strconv.ParseInt(rest[i:j], 0, 64); err == nil {
+				searchRange = n
+			}
+			i = j
+			continue
+		}
+		switch rest[i] {
+		case 's':
+			offsetAtStart = true
+		case 'B', 'H', 'h', 'L', 'l':
+			pstringLen = string(rest[i])
+		}
+		i++
+	}
+	return
+}
+
+// splitNumericOp parses "uleshort/256", "uleshort%256", and "leldate+631065600".
 // String flags such as "string/c" are left unchanged.
 func splitNumericOp(typeStr string) (string, string, uint64) {
-	for _, op := range []string{"/", "%"} {
+	for _, op := range []string{"+", "-", "/", "%"} {
 		idx := strings.Index(typeStr, op)
 		if idx <= 0 {
 			continue
@@ -294,6 +335,40 @@ func unescapeMagic(s string) string {
 	return b.String()
 }
 
+// stripCSize removes a C integer suffix such as the L in 0x1b031336L.
+func stripCSize(s string) string {
+	if s == "" {
+		return s
+	}
+	i := len(s) - 1
+	switch s[i] {
+	case 'l', 'L', 's', 'S', 'h', 'H', 'b', 'B', 'c', 'C':
+		i--
+	default:
+		return s
+	}
+	if i >= 0 && (s[i] == 'u' || s[i] == 'U') {
+		i--
+	}
+	return s[:i+1]
+}
+
+// encodeGUID stores a magic GUID the way file compares it: the first three
+// fields are little-endian and the last two are left as written.
+func encodeGUID(s string) ([]byte, error) {
+	raw, err := hex.DecodeString(strings.ReplaceAll(s, "-", ""))
+	if err != nil || len(raw) != 16 {
+		return nil, fmt.Errorf("invalid guid: %s", s)
+	}
+	out := []byte{
+		raw[3], raw[2], raw[1], raw[0],
+		raw[5], raw[4],
+		raw[7], raw[6],
+	}
+	out = append(out, raw[8:]...)
+	return out, nil
+}
+
 func isHex(c byte) bool {
 	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
 }
@@ -311,10 +386,17 @@ func hexVal(c byte) byte {
 
 func parseTypeValue(typeStr string, valueStr string) (any, error) {
 	switch typeStr {
-	case "string", "pstring", "bestring16", "lestring16", "regex", "search":
+	case "string", "pstring", "bestring16", "lestring16", "regex", "search", "guid":
 		var processedValue []byte
 
 		processedValue = []byte(unescapeMagic(valueStr))
+		if typeStr == "guid" {
+			b, err := encodeGUID(string(processedValue))
+			if err != nil {
+				return nil, err
+			}
+			return string(b), nil
+		}
 
 		// Return as string for the 'Value' field
 		return string(processedValue), nil
@@ -367,6 +449,21 @@ func parseTypeValue(typeStr string, valueStr string) (any, error) {
 // parseMagicUint parses an unsigned magic value. A negative literal such as
 // -1 is kept as the two's-complement bit pattern of the given width.
 func parseMagicUint(valueStr string, bitSize int) (uint64, error) {
+	if val, err := parseMagicUintRaw(valueStr, bitSize); err == nil {
+		return val, nil
+	}
+	// 0x1b031336L is a C integer. The suffix is only eaten when it is not
+	// part of the number, so a hex digit such as the c in 0xc stays.
+	trimmed := stripCSize(valueStr)
+	if trimmed != valueStr {
+		if val, err := parseMagicUintRaw(trimmed, bitSize); err == nil {
+			return val, nil
+		}
+	}
+	return 0, fmt.Errorf("invalid number %s", valueStr)
+}
+
+func parseMagicUintRaw(valueStr string, bitSize int) (uint64, error) {
 	val, err := strconv.ParseUint(valueStr, 0, bitSize)
 	if err == nil {
 		return val, nil

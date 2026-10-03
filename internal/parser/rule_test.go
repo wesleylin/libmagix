@@ -68,7 +68,7 @@ func TestRule_Match(t *testing.T) {
 		},
 		{
 			name: "Search match NOT found (out of range)",
-			rule: Rule{Offset: 0, Type: "search", SearchRange: 5, Value: "FOUND"},
+			rule: Rule{Offset: 0, Type: "search", SearchRange: 3, Value: "FOUND"},
 			data: []byte("---FOUND---"),
 			want: false,
 		},
@@ -316,6 +316,43 @@ func TestRule_ResolveOffset_IndirectMultiply(t *testing.T) {
 	}
 	if gotOffset != 3*4096 {
 		t.Errorf("resolveOffset() = %v, want %v", gotOffset, 3*4096)
+	}
+}
+
+func TestRule_SearchRangeIncludesPattern(t *testing.T) {
+	rule := Rule{Type: "search", SearchRange: 1, Value: "P2", Operator: "="}
+	got, off := rule.Match([]byte("P2\n2 2\n"), 0, false)
+	if !got || off != 2 {
+		t.Fatalf("search/1 = %v, %d; want match at 2", got, off)
+	}
+}
+
+func TestRule_PStringAnyStopsAtNUL(t *testing.T) {
+	// Length includes the trailing NUL. 'x' leaves the offset on that NUL.
+	data := []byte{0x00, 0x05, 'a', 'b', 'c', 0, 'b'}
+	rule := Rule{Type: "pstring", PStringLengthType: "H", MatchAny: true, Operator: "x"}
+	got, off := rule.Match(data, 0, false)
+	if !got || off != 5 {
+		t.Fatalf("pstring x = %v, %d; want 5", got, off)
+	}
+}
+
+func TestRule_GUIDAndDateShift(t *testing.T) {
+	guid, err := ParseLine("0\tguid\tC1C41626-504C-4092-ACA9-41F936934328\tEFI")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := []byte{0x26, 0x16, 0xc4, 0xc1, 0x4c, 0x50, 0x92, 0x40, 0xac, 0xa9, 0x41, 0xf9, 0x36, 0x93, 0x43, 0x28}
+	if ok, _ := guid.Match(data, 0, false); !ok {
+		t.Fatal("guid did not match")
+	}
+
+	shifted, err := ParseLine("0\tleldate+631065600\tx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if shifted.TypeOp != "+" || shifted.TypeOpArg != 631065600 {
+		t.Fatalf("type op = %q %d", shifted.TypeOp, shifted.TypeOpArg)
 	}
 }
 

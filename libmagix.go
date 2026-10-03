@@ -73,7 +73,7 @@ func (m *Magix) Identify(data []byte) *Result {
 			var fullMsg strings.Builder
 			var lastMime string
 
-			m.identifyRecursive(data, &m.rules[i], 0, matchedOffset, false, val, false, &fullMsg, &lastMime)
+			m.identifyRecursive(data, &m.rules[i], 0, matchedOffset, false, val, false, &fullMsg, &lastMime, 0)
 			// A level-0 test with an empty description does not count as a hit
 			// unless a continuation printed something. libmagic keeps scanning.
 			if strings.TrimSpace(fullMsg.String()) == "" && lastMime == "" {
@@ -89,33 +89,30 @@ func (m *Magix) Identify(data []byte) *Result {
 	return nil
 }
 
-func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relativeBase int64, inUse bool, val any, flip bool, fullMsg *strings.Builder, lastMime *string) {
+func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relativeBase int64, inUse bool, val any, flip bool, fullMsg *strings.Builder, lastMime *string, depth int) {
+	if r.Type == "indirect" {
+		appendMagicText(fullMsg, parser.FormatMessage(r.Message, r.Type, val))
+		if depth < 2 {
+			m.identifyAt(data, relativeBase, fullMsg, lastMime, depth+1)
+		}
+		m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, depth)
+		return
+	}
 	if r.Type == "use" {
-		m.execUse(data, r, relativeBase, flip, fullMsg, lastMime)
-		// Continuations of the use line run after the named block.
-		// Their relative base is the offset where the use was entered.
-		m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime)
+		// Continuations of the use line run only after the named block
+		// matches. Their relative base is the offset where the use was entered.
+		if m.execUse(data, r, relativeBase, flip, fullMsg, lastMime, depth) {
+			m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, depth)
+		}
 		return
 	}
 
-	msg := parser.FormatMessage(r.Message, r.Type, val)
 	if r.Mime != "" {
 		*lastMime = r.Mime
 	}
+	appendMagicText(fullMsg, parser.FormatMessage(r.Message, r.Type, val))
 
-	if msg != "" {
-		// Handle backspace \b
-		if strings.HasPrefix(msg, "\\b") {
-			fullMsg.WriteString(msg[2:])
-		} else {
-			if fullMsg.Len() > 0 && !strings.HasSuffix(fullMsg.String(), " ") {
-				fullMsg.WriteString(" ")
-			}
-			fullMsg.WriteString(msg)
-		}
-	}
-
-	m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime)
+	m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, depth)
 }
 
 // walk scans rules that share a continuation level.
@@ -123,8 +120,9 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relati
 // clear resets that flag so a later default can still run.
 // Inside a subroutine, direct offsets stay relative to plainBase (the use).
 // '&' offsets stay relative to relativeBase (the end of the previous match).
-func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase int64, inUse, flip bool, fullMsg *strings.Builder, lastMime *string) {
+func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase int64, inUse, flip bool, fullMsg *strings.Builder, lastMime *string, depth int) bool {
 	gotMatch := false
+	matchedAny := false
 	for i := range rules {
 		r := rules[i]
 		if r.Type == "default" && gotMatch {
@@ -149,19 +147,47 @@ func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase i
 			continue
 		}
 		if r.Type == "clear" {
-			m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime)
+			m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime, depth)
 			gotMatch = false
 			continue
 		}
 		gotMatch = true
-		m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime)
+		matchedAny = true
+		m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime, depth)
+	}
+	return matchedAny
+}
+
+// identifyAt runs the top-level tests as if the file began at base.
+// indirect rules use this to describe the bytes they point at.
+func (m *Magix) identifyAt(data []byte, base int64, fullMsg *strings.Builder, lastMime *string, depth int) {
+	for i := range m.rules {
+		matched, off, val := m.rules[i].MatchValue(data, base, true)
+		if !matched {
+			continue
+		}
+		var nested strings.Builder
+		var mime string
+		m.identifyRecursive(data, &m.rules[i], base, off, true, val, false, &nested, &mime, depth)
+		if strings.TrimSpace(nested.String()) == "" && mime == "" {
+			continue
+		}
+		text := nested.String()
+		if text != "" && fullMsg.Len() > 0 && !strings.HasSuffix(fullMsg.String(), " ") && text[0] != ' ' {
+			fullMsg.WriteByte(' ')
+		}
+		fullMsg.WriteString(text)
+		if mime != "" {
+			*lastMime = mime
+		}
+		return
 	}
 }
 
-func (m *Magix) execUse(data []byte, r *parser.Rule, useOffset int64, flip bool, fullMsg *strings.Builder, lastMime *string) {
+func (m *Magix) execUse(data []byte, r *parser.Rule, useOffset int64, flip bool, fullMsg *strings.Builder, lastMime *string, depth int) bool {
 	name, ok := r.Value.(string)
 	if !ok {
-		return
+		return false
 	}
 	name = strings.TrimPrefix(name, `\`)
 	if strings.HasPrefix(name, "^") {
@@ -170,10 +196,36 @@ func (m *Magix) execUse(data []byte, r *parser.Rule, useOffset int64, flip bool,
 	}
 	subRule, found := m.namedRules[name]
 	if !found {
+		return false
+	}
+	// Print into the caller buffer so a "\b" continuation can sit against
+	// the text already there. Roll back when the subroutine misses.
+	saved := fullMsg.String()
+	savedMime := *lastMime
+	if subRule.Message != "" {
+		appendMagicText(fullMsg, parser.FormatMessage(subRule.Message, subRule.Type, nil))
+	}
+	if !m.walk(data, subRule.Children, useOffset, useOffset, true, flip, fullMsg, lastMime, depth) {
+		fullMsg.Reset()
+		fullMsg.WriteString(saved)
+		*lastMime = savedMime
+		return false
+	}
+	return true
+}
+
+func appendMagicText(fullMsg *strings.Builder, msg string) {
+	if msg == "" {
 		return
 	}
-	// Direct offsets inside a subroutine are relative to the use.
-	m.walk(data, subRule.Children, useOffset, useOffset, true, flip, fullMsg, lastMime)
+	if strings.HasPrefix(msg, "\\b") {
+		fullMsg.WriteString(msg[2:])
+		return
+	}
+	if fullMsg.Len() > 0 && !strings.HasSuffix(fullMsg.String(), " ") {
+		fullMsg.WriteString(" ")
+	}
+	fullMsg.WriteString(msg)
 }
 
 func swapEndianType(t string) string {
