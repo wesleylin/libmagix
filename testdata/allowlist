@@ -1,0 +1,23 @@
+# Basenames from testdata/upstream that Identify already matches.
+# One name per line, without the .testfile suffix.
+# Blank lines and # comments are ignored.
+Animated_PNG_example_bouncing_beach_ball
+apng-ffmpeg
+bgcode
+zstd-v0.2-FF
+zstd-v0.3-FF
+zstd-v0.4-FF
+zstd-v0.5-FF
+zstd-v0.6-FF
+zstd-v0.7-21
+zstd-v0.7-22
+zstd-v0.8-01
+zstd-v0.8-02
+zstd-v0.8-03
+zstd-v0.8-16
+zstd-v0.8-20
+zstd-v0.8-21
+zstd-v0.8-22
+zstd-v0.8-23
+zstd-v0.8-F4
+zstd-v0.8-FF

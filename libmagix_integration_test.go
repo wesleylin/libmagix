@@ -1,6 +1,7 @@
 package libmagix_test
 
 import (
+	"bufio"
 	"encoding/binary"
 	"log/slog"
 	"os"
@@ -510,24 +511,6 @@ func TestEasyAllowlistSignatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// testdata/sample.bgcode is tests/bgcode.testfile from file/file
-	// 5e57b94cdd3f2bc2f6db8581dcce76a89fc9c9f7. The other names in this
-	// test have no sample in that directory.
-	t.Run("bgcode", func(t *testing.T) {
-		data, err := os.ReadFile("testdata/sample.bgcode")
-		if err != nil {
-			t.Fatal(err)
-		}
-		got := engine.Identify(data)
-		if got == nil {
-			t.Fatal("Identify() = nil")
-		}
-		const want = "Binary G-code Version 1, CRC32 checksum"
-		if got.Message != want {
-			t.Errorf("message = %q, want %q", got.Message, want)
-		}
-	})
-
 	p := parser.NewParser(logger)
 	names := []string{
 		"amanda", "application", "beetle", "bhl", "ebml", "karma",
@@ -601,4 +584,54 @@ func signatureBytes(r *parser.Rule) ([]byte, bool) {
 	data := make([]byte, int(r.Offset)+width)
 	put(data[r.Offset:])
 	return data, true
+}
+
+func TestUpstreamFileSamples(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/upstream/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := readNameList(t, "testdata/allowlist")
+	if len(names) == 0 {
+		t.Fatal("testdata/allowlist is empty")
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join("testdata/upstream", name+".testfile"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantBytes, err := os.ReadFile(filepath.Join("testdata/upstream", name+".result"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := strings.TrimRight(string(wantBytes), "\n")
+			got := engine.Identify(data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", want)
+			}
+			if got.Message != want {
+				t.Errorf("message = %q, want %q", got.Message, want)
+			}
+		})
+	}
+}
+
+func readNameList(t *testing.T, path string) []string {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	var names []string
+	for sc := bufio.NewScanner(f); sc.Scan(); {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		names = append(names, line)
+	}
+	return names
 }
