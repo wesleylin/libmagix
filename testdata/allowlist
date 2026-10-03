@@ -34,3 +34,11 @@ rpm-v3.0-src
 rtfd
 uf2
 xclbin
+pgp-binary-key-v2-phil
+pgp-binary-key-v3-lutz
+pgp-binary-key-v4-dsa
+pgp-binary-key-v4-ecc-no-userid-secret
+pgp-binary-key-v4-ecc-secret-key
+pgp-binary-key-v4-rsa-key
+pgp-binary-key-v4-rsa-no-userid-secret
+pgp-binary-key-v4-rsa-secret-key

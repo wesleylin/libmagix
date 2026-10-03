@@ -318,3 +318,35 @@ func TestRule_ResolveOffset_IndirectMultiply(t *testing.T) {
 		t.Errorf("resolveOffset() = %v, want %v", gotOffset, 3*4096)
 	}
 }
+
+func TestRule_ResolveOffset_RelativeIndirect(t *testing.T) {
+	// OpenPGP v2 header: CTB, 2-byte length 0x008d, version.
+	// The use is at the body (offset 3). (&-2.S) reads the length and
+	// lands on the next packet at 3+141 = 144.
+	data := []byte{0x99, 0x00, 0x8d, 0x02}
+	rule := Rule{
+		IsIndirect:      true,
+		IsRelative:      true,
+		PointerRelative: true,
+		PointerOffset:   -2,
+		PointerType:     "S",
+	}
+	got, ok := rule.resolveOffset(data, 3, true)
+	if !ok || got != 144 {
+		t.Fatalf("resolveOffset() = %v, %d; want 144", ok, got)
+	}
+
+	// (&-1.B) from the byte after a 1-byte length header.
+	one := []byte{0x98, 34, 0x02}
+	byteRule := Rule{
+		IsIndirect:      true,
+		IsRelative:      true,
+		PointerRelative: true,
+		PointerOffset:   -1,
+		PointerType:     "B",
+	}
+	got, ok = byteRule.resolveOffset(one, 2, true)
+	if !ok || got != 36 {
+		t.Fatalf("byte jump = %v, %d; want 36", ok, got)
+	}
+}

@@ -111,6 +111,7 @@ func ParseLine(line string) (*Rule, error) {
 		SearchRange:       searchRange,
 		PStringLengthType: pstringLenType,
 		IsRelative:        isRelative,
+		PointerRelative:   ptrRelative,
 		TypeOp:            typeOp,
 		TypeOpArg:         typeOpArg,
 	}, nil

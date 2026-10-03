@@ -92,6 +92,9 @@ func (m *Magix) Identify(data []byte) *Result {
 func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relativeBase int64, inUse bool, val any, flip bool, fullMsg *strings.Builder, lastMime *string) {
 	if r.Type == "use" {
 		m.execUse(data, r, relativeBase, flip, fullMsg, lastMime)
+		// Continuations of the use line run after the named block.
+		// Their relative base is the offset where the use was entered.
+		m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime)
 		return
 	}
 

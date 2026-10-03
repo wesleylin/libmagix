@@ -27,6 +27,9 @@ type Rule struct {
 	PointerType   string
 	PointerOp     string // "+", "-", "*", "/", "%", "&", "|", "^"; empty means add
 	PointerAdd    int64
+	// PointerRelative is the '&' inside (&-2.S). The value read is a
+	// displacement from the current offset, not a file-absolute position.
+	PointerRelative bool
 
 	SearchRange int64
 	IsRelative  bool // Support for '&' relative offset
@@ -207,7 +210,7 @@ func (r *Rule) resolveOffset(data []byte, baseOffset int64, forcedRelative bool)
 
 		var pointerVal int64
 		switch r.PointerType {
-		case "b": // byte
+		case "b", "B": // unsigned byte
 			pointerVal = int64(data[ptrOff])
 		case "s": // little-endian short
 			if ptrOff+2 > int64(len(data)) {
@@ -231,6 +234,9 @@ func (r *Rule) resolveOffset(data []byte, baseOffset int64, forcedRelative bool)
 			pointerVal = int64(binary.BigEndian.Uint32(data[ptrOff : ptrOff+4]))
 		}
 		actualOffset = applyPointerOp(pointerVal, r.PointerOp, r.PointerAdjustment) + r.PointerAdd
+		if r.PointerRelative {
+			actualOffset += baseOffset
+		}
 	}
 
 	return actualOffset, true
