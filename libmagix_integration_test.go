@@ -607,7 +607,19 @@ func TestUpstreamFileSamples(t *testing.T) {
 				t.Fatal(err)
 			}
 			want := strings.TrimRight(string(wantBytes), "\n")
-			got := engine.Identify(data)
+			eng := engine
+			if paths, err := filepath.Glob(filepath.Join("testdata/upstream", name+"*.magic")); err == nil && len(paths) > 0 {
+				eng, err = libmagix.NewFiles(paths, logger)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+			var got *libmagix.Result
+			if continueFlags(filepath.Join("testdata/upstream", name+".flags")) {
+				got = eng.IdentifyContinue(data)
+			} else {
+				got = eng.Identify(data)
+			}
 			if got == nil {
 				t.Fatalf("Identify() = nil, want %q", want)
 			}
@@ -616,6 +628,19 @@ func TestUpstreamFileSamples(t *testing.T) {
 			}
 		})
 	}
+}
+
+func continueFlags(path string) bool {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	for _, f := range strings.Fields(string(b)) {
+		if f == "k" || f == "-k" {
+			return true
+		}
+	}
+	return false
 }
 
 func readNameList(t *testing.T, path string) []string {

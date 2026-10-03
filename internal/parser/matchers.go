@@ -24,6 +24,13 @@ func matchString(data []byte, r *Rule, offset int64) (bool, int64) {
 		return true, offset
 	}
 	pattern := []byte(valStr)
+	if r.StringFlags&(StringOptionalWhitespace|StringCompactWhitespace|StringIgnoreLower|StringIgnoreUpper) != 0 &&
+		(r.Operator == "" || r.Operator == "=") {
+		if matchSpaced(data[offset:], pattern, r.StringFlags) {
+			return true, offset + int64(len(pattern))
+		}
+		return false, 0
+	}
 	switch r.Operator {
 	case ">", "<":
 		end := offset + int64(len(pattern))
@@ -46,6 +53,57 @@ func matchString(data []byte, r *Rule, offset int64) (bool, int64) {
 		}
 		return false, 0
 	}
+}
+
+// matchSpaced compares a pattern whose spaces are whitespace classes.
+// A pattern space with /w matches zero or more file whitespace bytes.
+// A pattern space with /W matches one or more. The reported match end
+// stays at offset+len(pattern), which is what continuations such as
+// ">&-1" are measured from.
+func matchSpaced(file, pat []byte, flags uint32) bool {
+	i, j := 0, 0
+	for j < len(pat) {
+		if flags&StringCompactWhitespace != 0 && isMagicSpace(pat[j]) {
+			j++
+			if i >= len(file) || !isMagicSpace(file[i]) {
+				return false
+			}
+			i++
+			if j >= len(pat) || !isMagicSpace(pat[j]) {
+				for i < len(file) && isMagicSpace(file[i]) {
+					i++
+				}
+			}
+			continue
+		}
+		if flags&StringOptionalWhitespace != 0 && isMagicSpace(pat[j]) {
+			j++
+			for i < len(file) && isMagicSpace(file[i]) {
+				i++
+			}
+			continue
+		}
+		if i >= len(file) {
+			return false
+		}
+		fb, pb := file[i], pat[j]
+		if flags&StringIgnoreLower != 0 && pb >= 'a' && pb <= 'z' && fb >= 'A' && fb <= 'Z' {
+			fb += 'a' - 'A'
+		}
+		if flags&StringIgnoreUpper != 0 && pb >= 'A' && pb <= 'Z' && fb >= 'a' && fb <= 'z' {
+			fb -= 'a' - 'A'
+		}
+		if fb != pb {
+			return false
+		}
+		i++
+		j++
+	}
+	return true
+}
+
+func isMagicSpace(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '\v' || b == '\f'
 }
 
 // matchPString matches Pascal string rules against data
@@ -456,6 +514,10 @@ func findRegex(data []byte, r *Rule, offset int64) (string, int64, int64, bool) 
 	end := offset + limit
 	if end > int64(len(data)) {
 		end = int64(len(data))
+	}
+	// file compiles with REG_NEWLINE, so ^ and $ also match at line edges.
+	if strings.ContainsAny(pat, "^$") {
+		pat = "(?m)" + pat
 	}
 	re, err := regexp.Compile(pat)
 	if err != nil {

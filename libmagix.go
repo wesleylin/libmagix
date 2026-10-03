@@ -3,6 +3,7 @@ package libmagix
 import (
 	"log/slog"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/wesleylin/libmagix/internal/parser"
@@ -47,8 +48,28 @@ func New(magicPath string, logger *slog.Logger) (*Magix, error) {
 	if err != nil {
 		return nil, err
 	}
+	return newFromRules(rawRules, logger, magicPath), nil
+}
 
-	// Separate named rules from main rules
+// NewFiles loads magic from the given files, in order.
+// Tests use this for a sample that ships its own magic database.
+func NewFiles(paths []string, logger *slog.Logger) (*Magix, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	p := parser.NewParser(logger)
+	var raw []parser.Rule
+	for _, path := range paths {
+		rules, err := p.LoadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		raw = append(raw, rules...)
+	}
+	return newFromRules(raw, logger, strings.Join(paths, ",")), nil
+}
+
+func newFromRules(rawRules []parser.Rule, logger *slog.Logger, from string) *Magix {
 	mainRules := []parser.Rule{}
 	namedRules := make(map[string]*parser.Rule)
 	for i := range rawRules {
@@ -61,32 +82,123 @@ func New(magicPath string, logger *slog.Logger) (*Magix, error) {
 			mainRules = append(mainRules, rawRules[i])
 		}
 	}
+	logger.Debug("Loaded", slog.Int("rules", len(mainRules)), slog.Int("named_blocks", len(namedRules)), slog.String("from", from))
+	return &Magix{rules: mainRules, namedRules: namedRules, logger: logger}
+}
 
-	logger.Debug("Loaded", slog.Int("rules", len(mainRules)), slog.Int("named_blocks", len(namedRules)), slog.String("from", magicPath))
-	return &Magix{rules: mainRules, namedRules: namedRules, logger: logger}, nil
+type hit struct {
+	msg      string
+	mime     string
+	strength int
+	index    int
 }
 
 // Identify takes file bytes and returns a Result containing the full, concatenated description.
 func (m *Magix) Identify(data []byte) *Result {
+	return m.identify(data, false)
+}
+
+// IdentifyContinue reports every level-0 hit, the way file -k does.
+func (m *Magix) IdentifyContinue(data []byte) *Result {
+	return m.identify(data, true)
+}
+
+// identify follows file_buffer: JSON, then the binary magic pass.
+// A binary hit is the whole answer. Otherwise the text pass runs on
+// ASCII or decoded UTF-16 and the encoding phrase is appended.
+func (m *Magix) identify(data []byte, cont bool) *Result {
+	if msg, ok := jsonMessage(data); ok {
+		return &Result{Message: msg}
+	}
+	view, code, textual := textView(data)
+	// A /b string is skipped when the bytes already look like text.
+	// The text pass then prints the /t description instead.
+	binary := m.collect(data, false, cont, textual)
+	if len(binary) > 0 && !cont {
+		return &Result{Message: binary[0].msg, Mime: binary[0].mime}
+	}
+	var hits []hit
+	hits = append(hits, binary...)
+	if textual {
+		hits = append(hits, m.collect(view, true, cont, false)...)
+	}
+	if len(hits) == 0 {
+		if !textual {
+			return nil
+		}
+		return &Result{Message: escapeControls(appendTextTail("", code, view))}
+	}
+	if cont && len(hits) > 1 {
+		sort.SliceStable(hits, func(i, j int) bool {
+			if hits[i].strength != hits[j].strength {
+				return hits[i].strength > hits[j].strength
+			}
+			return hits[i].index > hits[j].index
+		})
+	}
+	msg, mime := joinHits(hits)
+	if textual && len(binary) == 0 {
+		msg = appendTextTail(msg, code, view)
+	}
+	return &Result{Message: escapeControls(msg), Mime: mime}
+}
+
+func (m *Magix) collect(data []byte, textPass, cont, looksText bool) []hit {
+	var hits []hit
 	for i := range m.rules {
-		if matched, matchedOffset, val := m.rules[i].MatchValue(data, 0, false); matched {
-			var fullMsg strings.Builder
-			var lastMime string
-
-			m.identifyRecursive(data, &m.rules[i], 0, matchedOffset, false, val, false, &fullMsg, &lastMime, 0)
-			// A level-0 test with an empty description does not count as a hit
-			// unless a continuation printed something. libmagic keeps scanning.
-			if strings.TrimSpace(fullMsg.String()) == "" && lastMime == "" {
-				continue
-			}
-
-			return &Result{
-				Message: strings.TrimSpace(fullMsg.String()),
-				Mime:    lastMime,
-			}
+		r := &m.rules[i]
+		if !r.MatchesPass(textPass) {
+			continue
+		}
+		if !textPass && looksText && r.StringFlags&parser.StringBinary != 0 && r.StringFlags&parser.StringText == 0 {
+			continue
+		}
+		matched, matchedOffset, val := r.MatchValue(data, 0, false)
+		if !matched {
+			continue
+		}
+		var fullMsg strings.Builder
+		var lastMime string
+		m.identifyRecursive(data, r, 0, matchedOffset, false, val, false, &fullMsg, &lastMime, 0)
+		// A level-0 test with an empty description does not count as a hit
+		// unless a continuation printed something. libmagic keeps scanning.
+		msg := strings.TrimSpace(fullMsg.String())
+		if msg == "" && lastMime == "" {
+			continue
+		}
+		hits = append(hits, hit{
+			msg:      msg,
+			mime:     lastMime,
+			strength: ruleStrength(r),
+			index:    i,
+		})
+		if !cont {
+			return hits
 		}
 	}
-	return nil
+	return hits
+}
+
+func ruleStrength(r *parser.Rule) int {
+	if s, ok := r.Value.(string); ok {
+		return len(s)
+	}
+	return 1
+}
+
+func joinHits(hits []hit) (string, string) {
+	var b strings.Builder
+	var mime string
+	for i, h := range hits {
+		if i > 0 {
+			b.WriteString("\n- ")
+		}
+		b.WriteString(h.msg)
+		if h.mime != "" {
+			mime = h.mime
+		}
+	}
+	return b.String(), mime
 }
 
 func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relativeBase int64, inUse bool, val any, flip bool, fullMsg *strings.Builder, lastMime *string, depth int) {

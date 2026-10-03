@@ -5,6 +5,18 @@ import (
 	"encoding/binary"
 	"fmt"
 	"strings"
+	"unicode/utf8"
+)
+
+// String modifier bits. They match the letters file(1) accepts after '/'.
+const (
+	StringCompactWhitespace uint32 = 1 << iota
+	StringOptionalWhitespace
+	StringText
+	StringBinary
+	StringTrim
+	StringIgnoreLower
+	StringIgnoreUpper
 )
 
 // Rule represents a single line in a magic file
@@ -37,6 +49,10 @@ type Rule struct {
 	OffsetAtStart bool
 	IsRelative    bool // Support for '&' relative offset
 
+	// StringFlags holds /t /b /w /W /T and the case flags.
+	// /t rules run in the text pass. /b rules run in the binary pass.
+	StringFlags uint32
+
 	Children []Rule
 	RuleName string // For 'name' blocks
 
@@ -51,6 +67,55 @@ type Rule struct {
 	// and "leldate+631065600" shifts the value.
 	TypeOp    string
 	TypeOpArg uint64
+}
+
+// MatchesPass reports whether this level-0 rule runs in the given pass.
+// file(1) marks search and regex patterns that look like text as text-only,
+// and plain strings as binary, unless /t or /b says otherwise.
+func (r *Rule) MatchesPass(textPass bool) bool {
+	text, bin := r.textClass()
+	if textPass {
+		return text
+	}
+	return bin
+}
+
+func (r *Rule) textClass() (text, bin bool) {
+	switch r.Type {
+	case "string", "search", "regex", "pstring", "lestring16", "bestring16":
+	default:
+		return false, true
+	}
+	if r.StringFlags&StringText != 0 {
+		text = true
+	}
+	if r.StringFlags&StringBinary != 0 {
+		bin = true
+	}
+	if text || bin {
+		return text, bin
+	}
+	if (r.Type == "search" || r.Type == "regex") && patternIsText(r.Value) {
+		return true, false
+	}
+	return false, true
+}
+
+func patternIsText(v any) bool {
+	s, ok := v.(string)
+	if !ok || s == "" || strings.IndexByte(s, 0) >= 0 || !utf8.ValidString(s) {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\t', '\n', '\r', '\f':
+			continue
+		}
+		if s[i] < 0x20 {
+			return false
+		}
+	}
+	return true
 }
 
 func (r Rule) String() string {
@@ -136,7 +201,11 @@ func (r *Rule) printable(data []byte, start int64) any {
 				return s
 			}
 		}
-		return readCString(data, start, 256)
+		s := readCString(data, start, 256)
+		if r.StringFlags&StringTrim != 0 {
+			s = strings.Trim(s, " \t\n\v\f\r")
+		}
+		return s
 	case "pstring":
 		if s, ok := pstringPayload(data, r, start); ok {
 			if printPattern {

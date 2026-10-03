@@ -47,7 +47,7 @@ func ParseLine(line string) (*Rule, error) {
 	rawType := parts[1]
 	rawValue := parts[2]
 
-	rawType, searchRange, pstringLenType, offsetAtStart := parseStringModifiers(rawType)
+	rawType, searchRange, pstringLenType, offsetAtStart, stringFlags := parseStringModifiers(rawType)
 
 	// parsing for mask and hashmask
 	typeStr, mask, hasMask, err := parseTypeAndMask(rawType)
@@ -102,6 +102,7 @@ func ParseLine(line string) (*Rule, error) {
 		SearchRange:       searchRange,
 		OffsetAtStart:     offsetAtStart,
 		PStringLengthType: pstringLenType,
+		StringFlags:       stringFlags,
 		IsRelative:        isRelative,
 		PointerRelative:   ptrRelative,
 		TypeOp:            typeOp,
@@ -109,10 +110,13 @@ func ParseLine(line string) (*Rule, error) {
 	}, nil
 }
 
-// parseStringModifiers splits "search/1", "regex/4s", "string/b", and "pstring/H".
+// parseStringModifiers splits "search/1", "regex/4s", "string/wt", and "pstring/H".
 // A leading number is the search window. 's' makes continuations relative to
 // the start of the match. Pascal-string length letters select the length field.
-func parseStringModifiers(raw string) (typeStr string, searchRange int64, pstringLen string, offsetAtStart bool) {
+// 't' and 'b' choose the text and binary passes. 'w' makes a pattern space
+// optional whitespace, 'W' makes it required whitespace, and 'T' trims the
+// bytes printed by %s.
+func parseStringModifiers(raw string) (typeStr string, searchRange int64, pstringLen string, offsetAtStart bool, flags uint32) {
 	typeStr = raw
 	slash := strings.IndexByte(raw, '/')
 	if slash <= 0 {
@@ -152,6 +156,20 @@ func parseStringModifiers(raw string) (typeStr string, searchRange int64, pstrin
 			offsetAtStart = true
 		case 'B', 'H', 'h', 'L', 'l':
 			pstringLen = string(rest[i])
+		case 't':
+			flags |= StringText
+		case 'b':
+			flags |= StringBinary
+		case 'w':
+			flags |= StringOptionalWhitespace
+		case 'W':
+			flags |= StringCompactWhitespace
+		case 'T':
+			flags |= StringTrim
+		case 'c':
+			flags |= StringIgnoreLower
+		case 'C':
+			flags |= StringIgnoreUpper
 		}
 		i++
 	}

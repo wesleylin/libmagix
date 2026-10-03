@@ -59,3 +59,24 @@ keyman-1
 matilde.arm
 pnm2
 xilinx
+# Text, JSON, and shebang samples.
+cmd1
+cmd2
+cmd3
+cmd4
+gedcom
+jpeg-text
+json1
+json2
+json3
+json4
+json5
+json6
+json7
+json8
+jsonlines1
+multiple
+osm
+pnm1
+pnm3
+utf16xmlsvg

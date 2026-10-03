@@ -46,3 +46,7 @@ efi
 filesystems
 keyman
 wordprocessors
+# Text descriptions: GEDCOM, OpenStreetMap and SVG, shebang scripts.
+scientific
+sgml
+varied.script
