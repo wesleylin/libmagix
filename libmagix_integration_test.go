@@ -510,9 +510,27 @@ func TestEasyAllowlistSignatures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// testdata/sample.bgcode is tests/bgcode.testfile from file/file
+	// 5e57b94cdd3f2bc2f6db8581dcce76a89fc9c9f7. The other names in this
+	// test have no sample in that directory.
+	t.Run("bgcode", func(t *testing.T) {
+		data, err := os.ReadFile("testdata/sample.bgcode")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := engine.Identify(data)
+		if got == nil {
+			t.Fatal("Identify() = nil")
+		}
+		const want = "Binary G-code Version 1, CRC32 checksum"
+		if got.Message != want {
+			t.Errorf("message = %q, want %q", got.Message, want)
+		}
+	})
+
 	p := parser.NewParser(logger)
 	names := []string{
-		"amanda", "application", "beetle", "bgcode", "bhl", "ebml", "karma",
+		"amanda", "application", "beetle", "bhl", "ebml", "karma",
 		"lauterbach", "lecter", "macos", "mathcad", "metastore", "mlssa",
 		"nasa", "octave", "pulsar", "svf", "teapot", "tgif", "wireless",
 	}
