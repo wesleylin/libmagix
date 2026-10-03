@@ -14,6 +14,19 @@ func TestParseLine(t *testing.T) {
 		wantErr bool
 	}{
 		{
+			name:  "Short octal NUL escape",
+			input: "0\tstring\trtfd\\0\\0\\0\\0\tRich Text Format Directory",
+			want: &Rule{
+				Level:    0,
+				Offset:   0,
+				Type:     "string",
+				Value:    "rtfd\x00\x00\x00\x00",
+				ValueRaw: []byte("rtfd\x00\x00\x00\x00"),
+				Operator: "=",
+				Message:  "Rich Text Format Directory",
+			},
+		},
+		{
 			name:  "Simple PDF check",
 			input: "0\tstring\t%PDF-\tPDF document",
 			want: &Rule{

@@ -84,6 +84,30 @@ func TestMatchString(t *testing.T) {
 			wantOffset: 0,
 		},
 		{
+			name: "String greater than pattern",
+			data: []byte("021\x00"),
+			rule: Rule{
+				Offset:   0,
+				Type:     "string",
+				Operator: ">",
+				Value:    "000",
+			},
+			wantMatch:  true,
+			wantOffset: 3,
+		},
+		{
+			name: "String not greater than pattern",
+			data: []byte("000"),
+			rule: Rule{
+				Offset:   0,
+				Type:     "string",
+				Operator: ">",
+				Value:    "000",
+			},
+			wantMatch:  false,
+			wantOffset: 0,
+		},
+		{
 			name: "String value is not a string type (should fail)",
 			data: []byte("test"),
 			rule: Rule{

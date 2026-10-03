@@ -20,13 +20,32 @@ func matchString(data []byte, r *Rule, offset int64) (bool, int64) {
 		return false, 0
 	}
 	// Empty string matches at the current offset (must be within bounds)
-	if valStr == "" {
+	if valStr == "" && (r.Operator == "" || r.Operator == "=") {
 		return true, offset
 	}
-	if bytes.HasPrefix(data[offset:], []byte(valStr)) {
-		return true, offset + int64(len(valStr))
+	pattern := []byte(valStr)
+	switch r.Operator {
+	case ">", "<":
+		end := offset + int64(len(pattern))
+		if end > int64(len(data)) {
+			return false, 0
+		}
+		cmp := bytes.Compare(data[offset:end], pattern)
+		if r.Operator == ">" && cmp > 0 || r.Operator == "<" && cmp < 0 {
+			return true, end
+		}
+		return false, 0
+	case "!":
+		if bytes.HasPrefix(data[offset:], pattern) {
+			return false, 0
+		}
+		return true, offset
+	default:
+		if bytes.HasPrefix(data[offset:], pattern) {
+			return true, offset + int64(len(pattern))
+		}
+		return false, 0
 	}
-	return false, 0
 }
 
 // matchPString matches Pascal string rules against data

@@ -26,3 +26,11 @@ svf
 teapot
 tgif
 wireless
+# Samples in testdata/upstream that match with these fragments.
+android
+gentoo
+pcjr
+rpm
+rtf
+uf2
+windows

@@ -230,26 +230,88 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 	return
 }
 
+// unescapeMagic decodes magic string escapes. Octal runs are one to three
+// digits, so "\0" is a NUL. Go's strconv.Unquote rejects that form.
+func unescapeMagic(s string) string {
+	if !strings.Contains(s, `\`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' || i+1 >= len(s) {
+			b.WriteByte(s[i])
+			continue
+		}
+		i++
+		switch s[i] {
+		case 'a':
+			b.WriteByte('\a')
+		case 'b':
+			b.WriteByte('\b')
+		case 'f':
+			b.WriteByte('\f')
+		case 'n':
+			b.WriteByte('\n')
+		case 'r':
+			b.WriteByte('\r')
+		case 't':
+			b.WriteByte('\t')
+		case 'v':
+			b.WriteByte('\v')
+		case '\\':
+			b.WriteByte('\\')
+		case ' ':
+			b.WriteByte(' ')
+		case 'x':
+			if i+1 >= len(s) || !isHex(s[i+1]) {
+				b.WriteByte('x')
+				break
+			}
+			i++
+			v := hexVal(s[i])
+			if i+1 < len(s) && isHex(s[i+1]) {
+				i++
+				v = v<<4 | hexVal(s[i])
+			}
+			b.WriteByte(v)
+		default:
+			if s[i] < '0' || s[i] > '7' {
+				b.WriteByte(s[i])
+				break
+			}
+			v := s[i] - '0'
+			for n := 0; n < 2 && i+1 < len(s) && s[i+1] >= '0' && s[i+1] <= '7'; n++ {
+				i++
+				v = v*8 + (s[i] - '0')
+			}
+			b.WriteByte(v)
+		}
+	}
+	return b.String()
+}
+
+func isHex(c byte) bool {
+	return c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'
+}
+
+func hexVal(c byte) byte {
+	switch {
+	case c >= '0' && c <= '9':
+		return c - '0'
+	case c >= 'a' && c <= 'f':
+		return c - 'a' + 10
+	default:
+		return c - 'A' + 10
+	}
+}
+
 func parseTypeValue(typeStr string, valueStr string) (any, error) {
 	switch typeStr {
 	case "string", "pstring", "bestring16", "lestring16", "regex", "search":
 		var processedValue []byte
 
-		// 1. Convert the escaped string into actual bytes
-		if strings.Contains(valueStr, `\`) {
-			// Wrap in quotes so strconv.Unquote recognizes it as a Go-style string literal
-			quoted := `"` + valueStr + `"`
-			unquoted, err := strconv.Unquote(quoted)
-			if err != nil {
-				// Fallback: If unquoting fails, use the raw bytes
-				// (This happens if there are invalid escape sequences common in magic files)
-				processedValue = []byte(valueStr)
-			} else {
-				processedValue = []byte(unquoted)
-			}
-		} else {
-			processedValue = []byte(valueStr)
-		}
+		processedValue = []byte(unescapeMagic(valueStr))
 
 		// Return as string for the 'Value' field
 		return string(processedValue), nil

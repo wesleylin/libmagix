@@ -46,6 +46,20 @@ func TestFormatMessage(t *testing.T) {
 			want:     "id 0x2a",
 		},
 		{
+			name:     "zero hex suppresses prefix",
+			message:  "base %#08x",
+			typeName: "lelong",
+			value:    uint64(0),
+			want:     "base 00000000",
+		},
+		{
+			name:     "hex width includes prefix",
+			message:  "base %#08x",
+			typeName: "lelong",
+			value:    uint64(1),
+			want:     "base 0x000001",
+		},
+		{
 			name:     "nonprintable octal escape",
 			message:  "name %s",
 			typeName: "pstring",

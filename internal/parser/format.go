@@ -145,9 +145,66 @@ func formatNumber(spec, typeName string, value any) (string, bool) {
 		}
 		arg = maskUint(n, bits)
 	}
+	if verb == 'x' || verb == 'X' {
+		return formatHex(maskUint(n, bits), spec), true
+	}
 	body := spec[1 : len(spec)-1]
 	body = strings.TrimRight(body, "hlLjzt")
 	return fmt.Sprintf("%"+body+string(gverb), arg), true
+}
+
+// formatHex follows C printf for "%#08x": the width covers the 0x prefix,
+// and a zero value does not get that prefix.
+func formatHex(n uint64, spec string) string {
+	verb := spec[len(spec)-1]
+	body := strings.TrimRight(spec[1:len(spec)-1], "hlLjzt")
+	alt := strings.Contains(body, "#")
+	zeroPad := strings.Contains(body, "0") && !strings.Contains(body, "-")
+	width, prec, hasPrec := 0, 0, false
+	i := 0
+	for i < len(body) && strings.ContainsRune("-+ #0", rune(body[i])) {
+		i++
+	}
+	start := i
+	for i < len(body) && body[i] >= '0' && body[i] <= '9' {
+		width = width*10 + int(body[i]-'0')
+		i++
+	}
+	if i == start {
+		width = 0
+	}
+	if i < len(body) && body[i] == '.' {
+		hasPrec = true
+		i++
+		for i < len(body) && body[i] >= '0' && body[i] <= '9' {
+			prec = prec*10 + int(body[i]-'0')
+			i++
+		}
+		zeroPad = false
+	}
+	digits := strconv.FormatUint(n, 16)
+	if verb == 'X' {
+		digits = strings.ToUpper(digits)
+	}
+	if hasPrec && prec > len(digits) {
+		digits = strings.Repeat("0", prec-len(digits)) + digits
+	}
+	prefix := ""
+	if alt && n != 0 {
+		prefix = "0x"
+		if verb == 'X' {
+			prefix = "0X"
+		}
+	}
+	if width > len(prefix)+len(digits) {
+		pad := width - len(prefix) - len(digits)
+		if zeroPad {
+			digits = strings.Repeat("0", pad) + digits
+		} else {
+			return strings.Repeat(" ", pad) + prefix + digits
+		}
+	}
+	return prefix + digits
 }
 
 func coerceString(value any) string {
