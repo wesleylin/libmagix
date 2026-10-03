@@ -5,9 +5,11 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wesleylin/libmagix"
+	"github.com/wesleylin/libmagix/internal/parser"
 )
 
 func TestGIFIdentification(t *testing.T) {
@@ -500,4 +502,85 @@ func TestUpstreamAllowlistIdentification(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEasyAllowlistSignatures(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/upstream/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := parser.NewParser(logger)
+	names := []string{
+		"amanda", "application", "beetle", "bgcode", "bhl", "ebml", "karma",
+		"lauterbach", "lecter", "macos", "mathcad", "metastore", "mlssa",
+		"nasa", "octave", "pulsar", "svf", "teapot", "tgif", "wireless",
+	}
+	for _, name := range names {
+		t.Run(name, func(t *testing.T) {
+			rules, err := p.LoadFile(filepath.Join("magic/upstream/Magdir", name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var sig *parser.Rule
+			var data []byte
+			for i := range rules {
+				r := &rules[i]
+				if r.Level != 0 || r.MatchAny || r.Message == "" || r.Operator != "=" || r.IsIndirect {
+					continue
+				}
+				buf, ok := signatureBytes(r)
+				if !ok {
+					continue
+				}
+				sig = r
+				data = buf
+				break
+			}
+			if sig == nil {
+				t.Fatal("no level-0 signature")
+			}
+			got := engine.Identify(data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", sig.Message)
+			}
+			if !strings.Contains(got.Message, sig.Message) {
+				t.Errorf("Identify() = %q, want it to contain %q", got.Message, sig.Message)
+			}
+		})
+	}
+}
+
+func signatureBytes(r *parser.Rule) ([]byte, bool) {
+	width := 0
+	var put func([]byte)
+	switch r.Type {
+	case "string":
+		s, ok := r.Value.(string)
+		if !ok || s == "" {
+			return nil, false
+		}
+		data := make([]byte, int(r.Offset)+len(s))
+		copy(data[r.Offset:], s)
+		return data, true
+	case "belong", "ubelong":
+		v, ok := r.Value.(uint32)
+		if !ok {
+			return nil, false
+		}
+		width = 4
+		put = func(b []byte) { binary.BigEndian.PutUint32(b, v) }
+	case "lelong", "ulelong":
+		v, ok := r.Value.(uint32)
+		if !ok {
+			return nil, false
+		}
+		width = 4
+		put = func(b []byte) { binary.LittleEndian.PutUint32(b, v) }
+	default:
+		return nil, false
+	}
+	data := make([]byte, int(r.Offset)+width)
+	put(data[r.Offset:])
+	return data, true
 }
