@@ -3,6 +3,7 @@ package parser
 import (
 	"bytes"
 	"encoding/binary"
+	"regexp"
 	"strings"
 )
 
@@ -196,7 +197,17 @@ func matchSearch(data []byte, r *Rule, offset int64) (bool, int64) {
 	if idx == -1 {
 		return false, 0
 	}
-	return true, offset + int64(idx)
+	// Continuations are relative to the end of the match unless /s is set.
+	return true, offset + int64(idx) + int64(len(pattern))
+}
+
+// matchRegex matches an extended regular expression within a bounded window.
+func matchRegex(data []byte, r *Rule, offset int64) (bool, int64) {
+	_, end, ok := findRegex(data, r, offset)
+	if !ok {
+		return false, 0
+	}
+	return true, end
 }
 
 // matchByte matches byte rules against data
@@ -365,6 +376,55 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 		return false, offset
 	}
 	return true, offset + stride
+}
+
+func findRegex(data []byte, r *Rule, offset int64) (string, int64, bool) {
+	pat, ok := r.Value.(string)
+	if !ok || offset < 0 || offset > int64(len(data)) {
+		return "", 0, false
+	}
+	limit := int64(8192)
+	if r.SearchRange > 0 {
+		limit = r.SearchRange
+	}
+	end := offset + limit
+	if end > int64(len(data)) {
+		end = int64(len(data))
+	}
+	re, err := regexp.Compile(pat)
+	if err != nil {
+		return "", 0, false
+	}
+	loc := re.FindIndex(data[offset:end])
+	if loc == nil {
+		return "", 0, false
+	}
+	return string(data[offset+int64(loc[0]) : offset+int64(loc[1])]), offset + int64(loc[1]), true
+}
+
+func matchQuadLE(data []byte, r *Rule, offset int64) (bool, int64) {
+	return matchQuad(data, r, offset, binary.LittleEndian)
+}
+
+func matchQuadBE(data []byte, r *Rule, offset int64) (bool, int64) {
+	return matchQuad(data, r, offset, binary.BigEndian)
+}
+
+func matchQuad(data []byte, r *Rule, offset int64, order binary.ByteOrder) (bool, int64) {
+	if offset < 0 || offset+8 > int64(len(data)) {
+		return false, 0
+	}
+	actual := order.Uint64(data[offset : offset+8])
+	expected := castToUint64(r.Value)
+	if r.HasMask {
+		actual &= r.Mask
+		expected &= r.Mask
+	}
+	actual = applyTypeOp(actual, r)
+	if !compare(actual, expected, r.Operator) {
+		return false, offset
+	}
+	return true, offset + 8
 }
 
 // applyTypeOp divides or reduces the file value (uleshort/256, ulelong%256).

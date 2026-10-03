@@ -106,6 +106,33 @@ func TestParseLine(t *testing.T) {
 			},
 			wantErr: false,
 		},
+		{
+			name:  "Relative indirect offset",
+			input: ">>>(&-4.l)\tuleshort\t0x01EF",
+			want: &Rule{
+				Level:         3,
+				IsIndirect:    true,
+				IsRelative:    true,
+				PointerOffset: -4,
+				PointerType:   "l",
+				Type:          "uleshort",
+				Operator:      "=",
+				Value:         uint16(0x01EF),
+			},
+			wantErr: false,
+		},
+		{
+			name:  "Operator separated from value by space",
+			input: ">>12\tbeshort\t>\t1",
+			want: &Rule{
+				Level:    2,
+				Offset:   12,
+				Type:     "beshort",
+				Operator: ">",
+				Value:    uint16(1),
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

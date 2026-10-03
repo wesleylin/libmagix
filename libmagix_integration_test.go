@@ -432,3 +432,72 @@ func TestDescriptionFormatting(t *testing.T) {
 		t.Errorf("label = %q, want %q", got, "label hello")
 	}
 }
+
+func TestUpstreamAllowlistIdentification(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/upstream/Magdir", logger)
+	if err != nil {
+		t.Fatalf("load allowlisted Magdir: %v", err)
+	}
+
+	cases := []struct {
+		file string
+		msg  string
+		mime string
+	}{
+		{
+			file: "testdata/sample.pdf",
+			msg:  "PDF document, version 1.3, 1 page(s)",
+			mime: "application/pdf",
+		},
+		{
+			file: "testdata/sample.gif",
+			msg:  "GIF image data, version 89a, 400 x 300",
+			mime: "image/gif",
+		},
+		{
+			file: "testdata/sample.jpg",
+			msg:  "JPEG image data, JFIF standard 1.01, resolution (DPI), density 72x72, segment length 16",
+			mime: "image/jpeg",
+		},
+		{
+			file: "testdata/sample.png",
+			msg:  "PNG image data, 172 x 178, 8-bit/color RGB, non-interlaced",
+			mime: "image/png",
+		},
+		{
+			file: "testdata/sample.tif",
+			msg:  "TIFF image data, big-endian, direntries=15, width=256, height=256, bps=8, compression=none, PhotometricInterpretation=BlackIsZero, description=MatLab PGMWRITE file, saved 27-Aug-96, orientation=upper-left",
+			mime: "image/tiff",
+		},
+		{
+			file: "testdata/blackbuck.bmp",
+			msg:  "PC bitmap, Windows 3.x format, 512 x 512 x 24, image size 786432, cbSize 786486, bits offset 54",
+			mime: "image/bmp",
+		},
+		{
+			file: "testdata/sample.gz",
+			msg:  "gzip compressed data, from Unix",
+			mime: "application/gzip",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.file, func(t *testing.T) {
+			data, err := os.ReadFile(tc.file)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := engine.Identify(data)
+			if got == nil {
+				t.Fatal("Identify() = nil")
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+			if got.Mime != tc.mime {
+				t.Errorf("mime = %q, want %q", got.Mime, tc.mime)
+			}
+		})
+	}
+}

@@ -73,7 +73,12 @@ func (m *Magix) Identify(data []byte) *Result {
 			var fullMsg strings.Builder
 			var lastMime string
 
-			m.identifyRecursive(data, &m.rules[i], matchedOffset, val, &fullMsg, &lastMime)
+			m.identifyRecursive(data, &m.rules[i], 0, matchedOffset, false, val, false, &fullMsg, &lastMime)
+			// A level-0 test with an empty description does not count as a hit
+			// unless a continuation printed something. libmagic keeps scanning.
+			if strings.TrimSpace(fullMsg.String()) == "" && lastMime == "" {
+				continue
+			}
 
 			return &Result{
 				Message: strings.TrimSpace(fullMsg.String()),
@@ -84,20 +89,9 @@ func (m *Magix) Identify(data []byte) *Result {
 	return nil
 }
 
-func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset int64, val any, fullMsg *strings.Builder, lastMime *string) {
+func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relativeBase int64, inUse bool, val any, flip bool, fullMsg *strings.Builder, lastMime *string) {
 	if r.Type == "use" {
-		name, ok := r.Value.(string)
-		if ok {
-			if subRule, found := m.namedRules[name]; found {
-				// Execute all children of the named block using the current lastMatchOffset
-				// IMPORTANT: Rules inside a subroutine are forced to be relative to the 'use' offset
-				for i := range subRule.Children {
-					if matched, matchedOffset, childVal := subRule.Children[i].MatchValue(data, lastMatchOffset, true); matched {
-						m.identifyRecursive(data, &subRule.Children[i], matchedOffset, childVal, fullMsg, lastMime)
-					}
-				}
-			}
-		}
+		m.execUse(data, r, relativeBase, flip, fullMsg, lastMime)
 		return
 	}
 
@@ -118,12 +112,107 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, lastMatchOffset i
 		}
 	}
 
-	// Try all children. In libmagic, multiple children at the same level can match.
-	for i := range r.Children {
-		// Relative rules (&) use the lastMatchOffset
-		if matched, matchedOffset, childVal := r.Children[i].MatchValue(data, lastMatchOffset, false); matched {
-			m.identifyRecursive(data, &r.Children[i], matchedOffset, childVal, fullMsg, lastMime)
+	m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime)
+}
+
+// walk scans rules that share a continuation level.
+// default matches only when nothing else at this level has matched.
+// clear resets that flag so a later default can still run.
+// Inside a subroutine, direct offsets stay relative to plainBase (the use).
+// '&' offsets stay relative to relativeBase (the end of the previous match).
+func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase int64, inUse, flip bool, fullMsg *strings.Builder, lastMime *string) {
+	gotMatch := false
+	for i := range rules {
+		r := rules[i]
+		if r.Type == "default" && gotMatch {
+			continue
 		}
+		if flip {
+			r.Type = swapEndianType(r.Type)
+			r.PointerType = swapEndianType(r.PointerType)
+		}
+
+		base := int64(0)
+		forced := false
+		if r.IsRelative {
+			base = relativeBase
+			forced = true
+		} else if inUse {
+			base = plainBase
+			forced = true
+		}
+		matched, off, val := r.MatchValue(data, base, forced)
+		if !matched {
+			continue
+		}
+		if r.Type == "clear" {
+			m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime)
+			gotMatch = false
+			continue
+		}
+		gotMatch = true
+		m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime)
+	}
+}
+
+func (m *Magix) execUse(data []byte, r *parser.Rule, useOffset int64, flip bool, fullMsg *strings.Builder, lastMime *string) {
+	name, ok := r.Value.(string)
+	if !ok {
+		return
+	}
+	name = strings.TrimPrefix(name, `\`)
+	if strings.HasPrefix(name, "^") {
+		flip = !flip
+		name = name[1:]
+	}
+	subRule, found := m.namedRules[name]
+	if !found {
+		return
+	}
+	// Direct offsets inside a subroutine are relative to the use.
+	m.walk(data, subRule.Children, useOffset, useOffset, true, flip, fullMsg, lastMime)
+}
+
+func swapEndianType(t string) string {
+	switch t {
+	case "leshort":
+		return "beshort"
+	case "beshort":
+		return "leshort"
+	case "uleshort":
+		return "ubeshort"
+	case "ubeshort":
+		return "uleshort"
+	case "lelong":
+		return "belong"
+	case "belong":
+		return "lelong"
+	case "ulelong":
+		return "ubelong"
+	case "ubelong":
+		return "ulelong"
+	case "lequad":
+		return "bequad"
+	case "bequad":
+		return "lequad"
+	case "ulequad":
+		return "ubequad"
+	case "ubequad":
+		return "ulequad"
+	case "lestring16":
+		return "bestring16"
+	case "bestring16":
+		return "lestring16"
+	case "l":
+		return "L"
+	case "L":
+		return "l"
+	case "s":
+		return "S"
+	case "S":
+		return "s"
+	default:
+		return t
 	}
 }
 

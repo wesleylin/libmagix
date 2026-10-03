@@ -1,0 +1,7 @@
+# Basenames to load from magic/upstream/Magdir.
+# One name per line. Blank lines and # comments are ignored.
+# jpeg is separate from images in this upstream snapshot.
+pdf
+images
+jpeg
+compress

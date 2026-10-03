@@ -74,9 +74,10 @@ func (r *Rule) MatchValue(data []byte, baseOffset int64, forcedRelative bool) (b
 	if r.Type == "name" {
 		return false, 0, nil // Declarations don't match data
 	}
-	if r.Type == "use" {
-		// 'use' calls always "match" to trigger the jump,
-		// and they always use the current baseOffset.
+	if r.Type == "use" || r.Type == "default" || r.Type == "clear" {
+		// 'use' calls always "match" to trigger the jump.
+		// default and clear are level-control tests; the walker decides
+		// whether a default is allowed to fire.
 		return true, actualOffset, nil
 	}
 
@@ -125,6 +126,11 @@ func (r *Rule) printable(data []byte, start int64) any {
 			return s
 		}
 		return ""
+	case "regex":
+		if s, _, ok := findRegex(data, r, start); ok {
+			return s
+		}
+		return ""
 	case "lestring16":
 		if printPattern {
 			if s, ok := r.Value.(string); ok {
@@ -158,6 +164,7 @@ var handlerMap = map[string]Handler{
 	"lestring16": matchUTF16LE,
 	"bestring16": matchUTF16BE,
 	"search":     matchSearch,
+	"regex":      matchRegex,
 	"byte":       matchByte,
 	"ubyte":      matchByte,
 	"leshort":    matchShortLE,
@@ -171,6 +178,11 @@ var handlerMap = map[string]Handler{
 	"uint16":     matchShortLE,
 	"uint32":     matchLongLE,
 	"long":       matchLongBE,
+	"quad":       matchQuadBE,
+	"bequad":     matchQuadBE,
+	"lequad":     matchQuadLE,
+	"ubequad":    matchQuadBE,
+	"ulequad":    matchQuadLE,
 }
 
 // resolveOffset calculates the final absolute offset, handling relative (&) and indirect ((...)) syntax.

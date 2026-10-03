@@ -67,6 +67,64 @@ func TestLoadDirectory(t *testing.T) {
 	}
 }
 
+func TestAllowlistSkipsUnlistedFiles(t *testing.T) {
+	root := t.TempDir()
+	magdir := filepath.Join(root, "upstream", "Magdir")
+	if err := os.MkdirAll(magdir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	pdf := "0\tstring\t%PDF-\tPDF document\n"
+	if err := os.WriteFile(filepath.Join(magdir, "pdf"), []byte(pdf), 0644); err != nil {
+		t.Fatal(err)
+	}
+	// Opened, this file fails to parse. The allowlist must not open it.
+	if err := os.WriteFile(filepath.Join(magdir, "images"), []byte("not a magic line\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "allowlist"), []byte("# enabled\npdf\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := NewParser(slog.New(slog.DiscardHandler))
+	rules, err := p.LoadDirectory(magdir)
+	if err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+	if len(rules) != 1 || rules[0].Message != "PDF document" {
+		t.Fatalf("rules = %+v, want the pdf rule only", rules)
+	}
+}
+
+func TestAllowlistParseError(t *testing.T) {
+	root := t.TempDir()
+	magdir := filepath.Join(root, "upstream", "Magdir")
+	if err := os.MkdirAll(magdir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(magdir, "pdf"), []byte("not a magic line\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "allowlist"), []byte("pdf\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	p := NewParser(slog.New(slog.DiscardHandler))
+	if _, err := p.LoadDirectory(magdir); err == nil {
+		t.Fatal("expected parse error for an allowlisted file")
+	}
+}
+
+func TestVendoredAllowlistParses(t *testing.T) {
+	p := NewParser(slog.New(slog.DiscardHandler))
+	rules, err := p.LoadDirectory("../../magic/upstream/Magdir")
+	if err != nil {
+		t.Fatalf("LoadDirectory: %v", err)
+	}
+	if len(rules) == 0 {
+		t.Fatal("allowlist produced no rules")
+	}
+}
+
 func TestBundledMagicParses(t *testing.T) {
 	matches, err := filepath.Glob("../../magic/Magdir/*")
 	if err != nil {

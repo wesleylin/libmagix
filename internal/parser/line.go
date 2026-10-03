@@ -16,6 +16,7 @@ func ParseLine(line string) (*Rule, error) {
 	// We use a custom splitter or regex because 'strings.Fields'
 	// fails on escaped spaces (e.g., 'string  \ name\ with\ space')
 	parts := splitMagicLine(line)
+	parts = joinSpacedOperator(parts)
 	if len(parts) < 3 {
 		return nil, fmt.Errorf("malformed line (need at least Offset, Type, Value): %s", line)
 	}
@@ -34,9 +35,12 @@ func ParseLine(line string) (*Rule, error) {
 		offsetPart = offsetPart[1:]
 	}
 
-	offset, isIndirect, ptrOff, ptrType, ptrOp, ptrArg, outerAdd, err := parseOffset(offsetPart)
+	offset, isIndirect, ptrOff, ptrType, ptrOp, ptrArg, outerAdd, ptrRelative, err := parseOffset(offsetPart)
 	if err != nil {
 		return nil, err
+	}
+	if ptrRelative {
+		isRelative = true
 	}
 
 	rawType := parts[1]
@@ -145,7 +149,7 @@ func isNumericType(typeStr string) bool {
 	}
 }
 
-func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrType string, ptrOp string, ptrArg int64, outerAdd int64, err error) {
+func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrType string, ptrOp string, ptrArg int64, outerAdd int64, ptrRelative bool, err error) {
 	start := strings.Index(raw, "(")
 	end := strings.LastIndex(raw, ")")
 
@@ -169,7 +173,12 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 		return
 	}
 
-	ptrOff, err = strconv.ParseInt(parts[0], 0, 64)
+	ptrRaw := parts[0]
+	if strings.HasPrefix(ptrRaw, "&") {
+		ptrRelative = true
+		ptrRaw = ptrRaw[1:]
+	}
+	ptrOff, err = strconv.ParseInt(ptrRaw, 0, 64)
 	if err != nil {
 		err = fmt.Errorf("invalid pointer offset: %v", err)
 		return
@@ -223,7 +232,7 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 
 func parseTypeValue(typeStr string, valueStr string) (any, error) {
 	switch typeStr {
-	case "string", "pstring", "bestring16", "lestring16":
+	case "string", "pstring", "bestring16", "lestring16", "regex", "search":
 		var processedValue []byte
 
 		// 1. Convert the escaped string into actual bytes
@@ -246,26 +255,32 @@ func parseTypeValue(typeStr string, valueStr string) (any, error) {
 		return string(processedValue), nil
 
 	case "belong", "lelong", "ubelong", "ulelong", "uint32", "long":
-		// ParseUint with base 0 automatically handles "0x1234" (Hex), "0123" (Octal), and "123" (Decimal)
-		val, err := strconv.ParseUint(valueStr, 0, 32)
+		val, err := parseMagicUint(valueStr, 32)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
 		}
 		return uint32(val), nil
 
 	case "short", "beshort", "leshort", "ubeshort", "uleshort", "uint16":
-		val, err := strconv.ParseUint(valueStr, 0, 16)
+		val, err := parseMagicUint(valueStr, 16)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
 		}
 		return uint16(val), nil
 
 	case "byte", "ubyte":
-		val, err := strconv.ParseUint(valueStr, 0, 8)
+		val, err := parseMagicUint(valueStr, 8)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
 		}
 		return uint8(val), nil
+
+	case "quad", "bequad", "lequad", "ubequad", "ulequad":
+		val, err := parseMagicUint(valueStr, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)
+		}
+		return val, nil
 
 	case "name", "use":
 		return valueStr, nil
@@ -274,6 +289,20 @@ func parseTypeValue(typeStr string, valueStr string) (any, error) {
 		// Unknown types are treated as strings to prevent crashing on future/unknown types
 		return valueStr, nil
 	}
+}
+
+// parseMagicUint parses an unsigned magic value. A negative literal such as
+// -1 is kept as the two's-complement bit pattern of the given width.
+func parseMagicUint(valueStr string, bitSize int) (uint64, error) {
+	val, err := strconv.ParseUint(valueStr, 0, bitSize)
+	if err == nil {
+		return val, nil
+	}
+	signed, serr := strconv.ParseInt(valueStr, 0, bitSize)
+	if serr != nil {
+		return 0, err
+	}
+	return uint64(signed), nil
 }
 
 // splitMagicLine is a helper to handle the specific spacing of magic files
@@ -310,6 +339,9 @@ func splitMagicLine(line string) []string {
 			if currentToken.Len() > 0 {
 				parts = append(parts, currentToken.String())
 				currentToken.Reset()
+				if len(parts) == 3 && isLoneOperator(parts[2]) {
+					maxParts = 4
+				}
 			}
 		} else {
 			currentToken.WriteRune(r)
@@ -322,6 +354,25 @@ func splitMagicLine(line string) []string {
 	}
 
 	return parts
+}
+
+// joinSpacedOperator turns "beshort > 1" into value ">1".
+// Magic files sometimes put a space between the operator and the number.
+func joinSpacedOperator(parts []string) []string {
+	if len(parts) < 4 || !isLoneOperator(parts[2]) {
+		return parts
+	}
+	parts[2] = parts[2] + parts[3]
+	return append(parts[:3], parts[4:]...)
+}
+
+func isLoneOperator(s string) bool {
+	switch s {
+	case "=", "<", ">", "&", "^", "!":
+		return true
+	default:
+		return false
+	}
 }
 
 // splitMagicLine is a helper to handle the specific spacing of magic files
