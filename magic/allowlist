@@ -154,6 +154,42 @@ sniffer
 web
 wsdl
 zyxel
+# Desktop tools. graphviz stays off: its patterns are commented out.
+gnome
+kde
+qt
+xwindows
+# Games.
+adventure
+allegro
+creativeassembly
+dbpf
+games
+playdate
+puzzle
+# Science, CAD, and geo. bioinformatics and olf do not parse: bare (0x04) and (0x38+0xcc).
+asterix
+biosig
+cad
+dataone
+esri
+fcs
+geo
+grace
+kicad
+kml
+lammps
+measure
+meteorological
+openfst
+psl
+sosi
+statistics
+usd
+uterus
+vicar
+visx
+vxl
 # Development tools and revision files.
 coverage
 ctags

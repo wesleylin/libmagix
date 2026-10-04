@@ -790,6 +790,66 @@ func TestArchiveMagdir(t *testing.T) {
 	}
 }
 
+func TestDesktopGamesScience(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kml := append([]byte("<?xml version=\"1.0\"?>\n"), []byte(" xmlns='http://earth.google.com/kml2.2'")...)
+	vxl := []byte{1, 0, 0x4e, 0x2c, 0x2b, 0x47}
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "gnome", data: []byte("GnomeKeyring\n\r\x00\n"), msg: "GNOME keyring"},
+		{name: "kde", data: []byte("[KDE Desktop Entry]\n"), msg: "KDE desktop entry, ASCII text"},
+		{name: "qt", data: []byte("<!DOCTYPE RCC>\n"), msg: "Qt Resource Collection file"},
+		{name: "xwindows", data: []byte("xkm\x01"), msg: "Compiled XKB Keymap: msb, version 1"},
+		{name: "adventure", data: []byte("Glul"), msg: "Glulx game data"},
+		{name: "allegro", data: []byte{0x73, 0x6c, 0x68, 0x21}, msg: "Allegro datafile (packed)"},
+		{name: "creativeassembly", data: []byte{0x50, 0x46, 0x48, 0x34}, msg: "Creative Assembly Archive version 4"},
+		{name: "dbpf", data: []byte("DBPF"), msg: "Maxis Database Packed File"},
+		{name: "games", data: []byte("IWAD"), msg: "doom main IWAD data"},
+		{name: "playdate", data: []byte("Playdate IMG"), msg: "Playdate image data"},
+		{name: "puzzle", data: append([]byte{0, 0}, []byte("ACROSS&DOWN")...), msg: "PUZ crossword puzzle"},
+		{name: "asterix", data: []byte("*STA"), msg: "Aster*x"},
+		{name: "biosig", data: []byte("GDF"), msg: "Biosig/GDF: General data format for biosignals"},
+		{name: "cad", data: []byte("AC1032"), msg: "DWG AutoDesk AutoCAD 2018/2019/2020"},
+		{name: "dataone", data: []byte("<DryadDatadryad-bibo/v3.1\n"), msg: "https://datadryad.org/profile/v3.1"},
+		{name: "esri", data: []byte{0, 0, 0x27, 0x0a}, msg: "ESRI Shapefile"},
+		{name: "fcs", data: []byte("FCS3.0"), msg: "Flow Cytometry Standard (FCS) data, version 3.0"},
+		{name: "geo", data: []byte("LASF"), msg: "LIDAR point data records"},
+		{name: "grace", data: []byte("# Grace project file\n"), msg: "Grace project file"},
+		{name: "kicad", data: []byte("(kicad_pcb "), msg: "KiCad Board Layout"},
+		{name: "kml", data: kml, msg: "Google KML document, ASCII text"},
+		{name: "lammps", data: []byte("LAMMPS data file\n"), msg: "LAMMPS data file"},
+		{name: "measure", data: []byte("MDF     4.10"), msg: "ASAM/MDF measurement file Version"},
+		{name: "meteorological", data: []byte("GRIB\x00\x00\x00\x01"), msg: "Gridded binary (GRIB) version 1"},
+		{name: "openfst", data: []byte{0x7e, 0xb2, 0xfd, 0xd6}, msg: "OpenFst binary FST data"},
+		{name: "psl", data: []byte(".DAFSA@PSL_1xxx\n"), msg: "Public Suffix List data (optimized) (Version 1)"},
+		{name: "sosi", data: []byte("..OMR\n..TRANSPAR\n.HODE\n"), msg: "SOSI map data, ASCII text"},
+		{name: "statistics", data: []byte("<stata_dta><header><release>"), msg: "Stata Data File"},
+		{name: "usd", data: []byte("#usda 1.0\n"), msg: "USD ASCII, version 1.0"},
+		{name: "uterus", data: []byte("UTE+"), msg: "uterus file"},
+		{name: "vicar", data: []byte("LBLSIZE="), msg: "PDS (VICAR) image data"},
+		{name: "visx", data: []byte{0x55, 0x55}, msg: "VISX image file"},
+		{name: "vxl", data: vxl, msg: "VXL data file, schema version no 1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 func TestNetworkMagdir(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	engine, err := libmagix.New("magic/Magdir", logger)
