@@ -423,6 +423,33 @@ func TestRule_ResolveOffset_RelativeIndirect(t *testing.T) {
 	}
 }
 
+func TestRule_IndirectPointerPastEndDoesNotMatchAtZero(t *testing.T) {
+	// The file starts with the pattern, but the pointer at offset 4 does
+	// not fit. Matching must miss rather than fall back to offset 0.
+	rule := Rule{
+		IsIndirect:    true,
+		PointerOffset: 4,
+		PointerType:   "l",
+		Type:          "string",
+		Value:         "PK",
+	}
+	if got, _ := rule.Match([]byte("PK"), 0, false); got {
+		t.Fatal("pointer past end matched at offset 0")
+	}
+
+	// Same miss for a level-control test, which otherwise always matches.
+	useRule := Rule{
+		IsIndirect:    true,
+		PointerOffset: 4,
+		PointerType:   "l",
+		Type:          "use",
+		Value:         "zip",
+	}
+	if got, _ := useRule.Match([]byte("PK"), 0, false); got {
+		t.Fatal("use with a pointer past end matched at offset 0")
+	}
+}
+
 func TestRule_ResolveOffset_FromEnd(t *testing.T) {
 	// ZIP end-of-central-directory is 22 bytes before EOF. (-6.l) reads the
 	// central-directory offset stored 6 bytes before EOF.

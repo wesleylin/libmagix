@@ -145,8 +145,12 @@ func (r *Rule) Match(data []byte, baseOffset int64, forcedRelative bool) (bool, 
 // MatchValue checks this rule and returns the value libmagic would print
 // with a printf conversion in the description.
 func (r *Rule) MatchValue(data []byte, baseOffset int64, forcedRelative bool) (bool, int64, any) {
-	// 1. Resolve the actual offset (handling relative and indirect offsets)
-	actualOffset, _ := r.resolveOffset(data, baseOffset, forcedRelative)
+	// 1. Resolve the actual offset (handling relative and indirect offsets).
+	// A pointer that cannot be read is not offset 0.
+	actualOffset, ok := r.resolveOffset(data, baseOffset, forcedRelative)
+	if !ok {
+		return false, 0, nil
+	}
 
 	// Handle Meta-types
 	if r.Type == "name" {
