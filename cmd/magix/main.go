@@ -7,11 +7,12 @@ import (
 	"os"
 
 	"github.com/wesleylin/libmagix"
+	"github.com/wesleylin/libmagix/magic"
 )
 
 func main() {
 	verbose := flag.Bool("v", false, "enable debug logging")
-	magicPath := flag.String("m", "./magic/Magdir", "magic file or directory")
+	magicPath := flag.String("m", "", "magic file or directory (default: embedded database)")
 	mimeOnly := flag.Bool("i", false, "output MIME type strings")
 	brief := flag.Bool("b", false, "do not prepend filenames to output")
 	flag.Usage = func() {
@@ -27,7 +28,15 @@ func main() {
 		logger = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))
 	}
 
-	m, err := libmagix.New(*magicPath, logger)
+	var (
+		m   *libmagix.Magix
+		err error
+	)
+	if *magicPath == "" {
+		m, err = libmagix.NewFS(magic.FS, "Magdir", logger)
+	} else {
+		m, err = libmagix.New(*magicPath, logger)
+	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading magic files: %v\n", err)
 		os.Exit(1)

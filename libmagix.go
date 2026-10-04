@@ -1,8 +1,10 @@
 package libmagix
 
 import (
+	"io/fs"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -26,30 +28,45 @@ func (r *Result) String() string {
 	return r.Message
 }
 
-// New loads all magic files from the specified directory.
+// New loads magic from a file or directory on disk.
+// A directory named Magdir is gated by a sibling allowlist file.
 func New(magicPath string, logger *slog.Logger) (*Magix, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	return newFromFS(os.DirFS(filepath.Dir(magicPath)), filepath.Base(magicPath), logger, magicPath)
+}
 
+// NewFS loads magic from root inside fsys.
+// The magix command uses this for the embedded database.
+func NewFS(fsys fs.FS, root string, logger *slog.Logger) (*Magix, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return newFromFS(fsys, root, logger, root)
+}
+
+func newFromFS(fsys fs.FS, root string, logger *slog.Logger, from string) (*Magix, error) {
 	p := parser.NewParser(logger)
-
-	info, err := os.Stat(magicPath)
+	info, err := fs.Stat(fsys, root)
 	if err != nil {
 		return nil, err
 	}
-
 	var rawRules []parser.Rule
 	if info.IsDir() {
-		rawRules, err = p.LoadDirectory(magicPath)
+		rawRules, err = p.LoadFS(fsys, root)
 	} else {
-		rawRules, err = p.LoadFile(magicPath)
+		f, openErr := fsys.Open(root)
+		if openErr != nil {
+			return nil, openErr
+		}
+		defer f.Close()
+		rawRules, err = p.Parse(f)
 	}
-
 	if err != nil {
 		return nil, err
 	}
-	return newFromRules(rawRules, logger, magicPath), nil
+	return newFromRules(rawRules, logger, from), nil
 }
 
 // NewFiles loads magic from the given files, in order.

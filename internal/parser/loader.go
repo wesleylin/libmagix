@@ -2,8 +2,12 @@ package parser
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -22,33 +26,37 @@ func (p *Parser) LoadFile(path string) ([]Rule, error) {
 // magic/Magdir is gated by magic/allowlist: only listed basenames are opened.
 // Other directories, including magic/fixtures, are loaded in full.
 func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
+	return p.LoadFS(os.DirFS(filepath.Dir(dirPath)), filepath.Base(dirPath))
+}
+
+// LoadFS scans root inside fsys. A directory named Magdir is gated by a
+// sibling allowlist file. Other directories are loaded in full.
+func (p *Parser) LoadFS(fsys fs.FS, root string) ([]Rule, error) {
+	root = path.Clean(root)
 	var allRootRules []Rule
 
-	allow, gated, err := allowlistFor(dirPath)
+	allow, gated, err := allowlistFrom(fsys, root)
 	if err != nil {
 		return nil, err
 	}
 
-	// Walk the directory
-	err = filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+	err = fs.WalkDir(fsys, root, func(filePath string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-
-		// Skip directories and hidden files (like .DS_Store)
-		if info.IsDir() || info.Name()[0] == '.' {
+		name := d.Name()
+		if d.IsDir() || name == "" || name[0] == '.' {
 			return nil
 		}
-
 		if gated {
-			if _, ok := allow[info.Name()]; !ok {
-				p.logger.Debug("skipping magic file not on allowlist", "path", path)
+			if _, ok := allow[name]; !ok {
+				p.logger.Debug("skipping magic file not on allowlist", "path", filePath)
 				return nil
 			}
 		}
 
-		p.logger.Debug("loading magic file", "path", path)
-		f, err := os.Open(path)
+		p.logger.Debug("loading magic file", "path", filePath)
+		f, err := fsys.Open(filePath)
 		if err != nil {
 			return err
 		}
@@ -57,44 +65,39 @@ func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 		tempRules, err := p.Parse(f)
 		if err != nil {
 			if gated {
-				return fmt.Errorf("parsing %s: %w", path, err)
+				return fmt.Errorf("parsing %s: %w", filePath, err)
 			}
-			// You might want to log the error and continue
-			// rather than stopping the whole app for one bad file
-			p.logger.Warn("skipping magic file", "path", path, "err", err)
+			p.logger.Warn("skipping magic file", "path", filePath, "err", err)
 			return nil
 		}
-
-		// Add these root rules to our master list
 		allRootRules = append(allRootRules, tempRules...)
-
-		// Add these root rules to our master list
 		p.logger.Debug("existing rules:" + fmt.Sprint(len(allRootRules)))
 		return nil
 	})
-
 	return allRootRules, err
 }
 
-// allowlistFor returns the basename set that gates dirPath.
-// It applies to a directory named Magdir when ../allowlist exists.
+// allowlistFrom returns the basename set that gates root.
+// It applies to a directory named Magdir when a sibling allowlist exists.
 // gated is false otherwise, and every magic file is loaded.
-func allowlistFor(dirPath string) (map[string]struct{}, bool, error) {
-	if filepath.Base(dirPath) != "Magdir" {
+func allowlistFrom(fsys fs.FS, root string) (map[string]struct{}, bool, error) {
+	if path.Base(root) != "Magdir" {
 		return nil, false, nil
 	}
-	path := filepath.Join(dirPath, "..", "allowlist")
-	f, err := os.Open(path)
+	f, err := fsys.Open(path.Join(path.Dir(root), "allowlist"))
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, false, nil
 		}
 		return nil, false, err
 	}
 	defer f.Close()
+	return readAllowlist(f)
+}
 
+func readAllowlist(r io.Reader) (map[string]struct{}, bool, error) {
 	allow := make(map[string]struct{})
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {

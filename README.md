@@ -51,7 +51,7 @@ func main() {
 
 running
 
-go run cmd/main.go testdata/sample.docx
+go run ./cmd/magix testdata/sample.docx
 
 ## How it Works
 
