@@ -790,6 +790,46 @@ func TestArchiveMagdir(t *testing.T) {
 	}
 }
 
+func TestNetworkMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "avro", data: []byte("Obj\x01"), msg: "Apache Avro, version 1"},
+		{name: "parquet", data: []byte("PAR1"), msg: "Apache Parquet file"},
+		{name: "sequence", data: []byte("SEQ\x01"), msg: "Apache Hadoop Sequence file version 1"},
+		{name: "btsnoop", data: append([]byte("btsnoop\x00"), 0, 0, 0, 1, 0, 0, 0x03, 0xe9), msg: "BTSnoop version 1, Unencapsulated HCI"},
+		{name: "cisco", data: []byte{0x85, 0x01, 0x14, 0x00}, msg: "cisco IOS microcode"},
+		{name: "ttcn", data: []byte("$Suite\n"), msg: "TTCN Abstract Test Suite"},
+		{name: "finger", data: []byte("FP1"), msg: "libfprint fingerprint data V1"},
+		{name: "modem", data: []byte("PVF1\n"), msg: "portable voice format"},
+		{name: "mozilla", data: []byte("mozLz40\x00"), msg: "Mozilla lz4 compressed data"},
+		{name: "netscape", data: []byte("# Netscape folder cache\n"), msg: "Netscape folder cache"},
+		{name: "nfdump", data: []byte{0x0c, 0xa5, 1, 0}, msg: "nfdump binary flow data (little-endian)"},
+		{name: "pcap", data: append([]byte{0xd4, 0xc3, 0xb2, 0xa1}, make([]byte, 20)...), msg: "pcap capture file, microsecond ts (little-endian) - version 0.0 (No link-layer encapsulation, capture length 0)"},
+		{name: "adblock", data: []byte("[Adblock Plus]\n"), msg: "Adblock Plus rules file"},
+		{name: "wsdl", data: append([]byte("wsdl"), 1, 0, 0, 0, 0, 0, 0, 0), msg: "PHP WSDL cache, version 0x1, created Thu Jan  1 00:00:00 1970"},
+		{name: "zyxel", data: []byte("ZyXEL\x02"), msg: "ZyXEL voice data"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 func TestDevtoolMagdir(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	engine, err := libmagix.New("magic/Magdir", logger)

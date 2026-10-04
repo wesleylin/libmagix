@@ -140,6 +140,20 @@ pkgadd
 tapebackup
 warc
 xdelta
+# Network captures and related formats. tplink's header walk stalls the matcher.
+apache
+btsnoop
+cisco
+communications
+finger
+modem
+mozilla
+netscape
+nfdump
+sniffer
+web
+wsdl
+zyxel
 # Development tools and revision files.
 coverage
 ctags
