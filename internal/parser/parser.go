@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strconv"
 	"strings"
 )
 
@@ -51,7 +52,17 @@ func (p *Parser) Parse(r io.Reader) ([]Rule, error) {
 					}
 				}
 			}
-			// For now, we skip other attributes (!:apple, !:ext, etc.)
+			if strings.HasPrefix(line, "!:strength") && lastAddedRule != nil {
+				rest := strings.TrimSpace(strings.TrimPrefix(line, "!:strength"))
+				if rest != "" {
+					op := rest[:1]
+					if n, err := strconv.ParseInt(strings.TrimSpace(rest[1:]), 0, 64); err == nil {
+						lastAddedRule.StrengthOp = op
+						lastAddedRule.StrengthArg = n
+					}
+				}
+			}
+			// !:apple, !:ext, and the other annotations are not used for matching.
 			continue
 		}
 

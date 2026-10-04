@@ -69,6 +69,10 @@ type Rule struct {
 	// and "leldate+631065600" shifts the value.
 	TypeOp    string
 	TypeOpArg uint64
+
+	// !:strength adjusts how early this rule is tried. "+" adds, "/" divides.
+	StrengthOp  string
+	StrengthArg int64
 }
 
 // MatchesPass reports whether this level-0 rule runs in the given pass.
@@ -290,18 +294,25 @@ var handlerMap = map[string]Handler{
 
 // resolveOffset calculates the final absolute offset, handling relative (&) and indirect ((...)) syntax.
 func (r *Rule) resolveOffset(data []byte, baseOffset int64, forcedRelative bool) (int64, bool) {
-	// 0. Initial offset
+	// 0. Initial offset. A negative absolute offset is from the end of
+	// the file (len-22). A relative negative offset stays a displacement
+	// from the previous match.
 	absoluteOffset := r.Offset
 	if r.IsRelative || forcedRelative {
 		absoluteOffset += baseOffset
+	} else if absoluteOffset < 0 {
+		absoluteOffset += int64(len(data))
 	}
 
 	// 1. Handle Indirect Offsets (e.g., (0x3c.l))
 	actualOffset := absoluteOffset
 	if r.IsIndirect {
 		ptrOff := r.PointerOffset
-		if r.IsRelative || forcedRelative {
+		if r.PointerRelative || r.IsRelative || forcedRelative {
 			ptrOff += baseOffset
+		} else if ptrOff < 0 {
+			// (-6.l) reads the pointer 6 bytes before EOF.
+			ptrOff += int64(len(data))
 		}
 
 		if ptrOff < 0 || ptrOff >= int64(len(data)) {

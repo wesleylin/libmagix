@@ -489,7 +489,7 @@ func TestUpstreamAllowlistIdentification(t *testing.T) {
 		},
 		{
 			file: "testdata/sample.gz",
-			msg:  "gzip compressed data, from Unix",
+			msg:  "gzip compressed data, from Unix, original size modulo 2^32 3",
 			mime: "application/gzip",
 		},
 	}

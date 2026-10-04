@@ -69,6 +69,9 @@ func renderSpec(spec, typeName string, value any) string {
 		if formatted, ok := formatTimestamp(typeName, value); ok {
 			return formatString(spec, formatted)
 		}
+		if formatted, ok := formatDOS(typeName, value); ok {
+			return formatString(spec, formatted)
+		}
 		return formatString(spec, coerceString(value))
 	case 'c':
 		n, ok := coerceUint(value)
@@ -128,6 +131,32 @@ func formatTimestamp(typeName string, value any) (string, bool) {
 		when = when.UTC()
 	}
 	return when.Format("Mon Jan _2 15:04:05 2006"), true
+}
+
+// formatDOS prints an MS-DOS date as "Jan 05 2028" and a time as "07:31:08".
+func formatDOS(typeName string, value any) (string, bool) {
+	n, ok := coerceUint(value)
+	if !ok {
+		return "", false
+	}
+	v := uint16(n)
+	switch typeName {
+	case "msdosdate", "lemsdosdate", "bemsdosdate":
+		day := int(v & 0x1f)
+		mon := int((v >> 5) & 0xf)
+		if mon < 1 || mon > 12 {
+			mon = 1
+		}
+		year := int(v>>9) + 1980
+		return time.Date(year, time.Month(mon), day, 0, 0, 0, 0, time.UTC).Format("Jan 02 2006"), true
+	case "msdostime", "lemsdostime", "bemsdostime":
+		sec := int(v&0x1f) * 2
+		min := int((v >> 5) & 0x3f)
+		hour := int(v >> 11)
+		return fmt.Sprintf("%02d:%02d:%02d", hour, min, sec), true
+	default:
+		return "", false
+	}
 }
 
 func formatString(spec, s string) string {

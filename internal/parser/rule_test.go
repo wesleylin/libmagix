@@ -387,3 +387,25 @@ func TestRule_ResolveOffset_RelativeIndirect(t *testing.T) {
 		t.Fatalf("byte jump = %v, %d; want 36", ok, got)
 	}
 }
+
+func TestRule_ResolveOffset_FromEnd(t *testing.T) {
+	// ZIP end-of-central-directory is 22 bytes before EOF. (-6.l) reads the
+	// central-directory offset stored 6 bytes before EOF.
+	data := make([]byte, 40)
+	data[18] = 7                                 // len-22
+	binary.LittleEndian.PutUint32(data[34:], 12) // len-6
+	plain := Rule{Offset: -22}
+	got, ok := plain.resolveOffset(data, 0, false)
+	if !ok || got != 18 {
+		t.Fatalf("from end = %v, %d; want 18", ok, got)
+	}
+	indir := Rule{
+		IsIndirect:    true,
+		PointerOffset: -6,
+		PointerType:   "l",
+	}
+	got, ok = indir.resolveOffset(data, 0, false)
+	if !ok || got != 12 {
+		t.Fatalf("indirect from end = %v, %d; want 12", ok, got)
+	}
+}

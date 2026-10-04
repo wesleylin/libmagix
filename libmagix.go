@@ -10,9 +10,10 @@ import (
 )
 
 type Magix struct {
-	rules      []parser.Rule
-	namedRules map[string]*parser.Rule
-	logger     *slog.Logger
+	rules       []parser.Rule
+	binaryOrder []int
+	namedRules  map[string]*parser.Rule
+	logger      *slog.Logger
 }
 
 // Result represents the outcome of an identification.
@@ -82,8 +83,31 @@ func newFromRules(rawRules []parser.Rule, logger *slog.Logger, from string) *Mag
 			mainRules = append(mainRules, rawRules[i])
 		}
 	}
+	// The binary pass tries the strongest level-0 test first. Equal strengths
+	// keep source order, and a level-0 default stays last. The text pass keeps
+	// source order so an earlier description such as SVG still wins.
+	binaryOrder := make([]int, len(mainRules))
+	for i := range binaryOrder {
+		binaryOrder[i] = i
+	}
+	sort.SliceStable(binaryOrder, func(i, j int) bool {
+		return mainRules[binaryOrder[i]].Strength() > mainRules[binaryOrder[j]].Strength()
+	})
+	binaryOrder = defaultsLast(mainRules, binaryOrder)
 	logger.Debug("Loaded", slog.Int("rules", len(mainRules)), slog.Int("named_blocks", len(namedRules)), slog.String("from", from))
-	return &Magix{rules: mainRules, namedRules: namedRules, logger: logger}
+	return &Magix{rules: mainRules, binaryOrder: binaryOrder, namedRules: namedRules, logger: logger}
+}
+
+func defaultsLast(rules []parser.Rule, order []int) []int {
+	var rest, defs []int
+	for _, i := range order {
+		if rules[i].Type == "default" {
+			defs = append(defs, i)
+			continue
+		}
+		rest = append(rest, i)
+	}
+	return append(rest, defs...)
 }
 
 type hit struct {
@@ -145,7 +169,14 @@ func (m *Magix) identify(data []byte, cont bool) *Result {
 
 func (m *Magix) collect(data []byte, textPass, cont, looksText bool) []hit {
 	var hits []hit
-	for i := range m.rules {
+	order := m.binaryOrder
+	if textPass {
+		order = make([]int, len(m.rules))
+		for i := range order {
+			order[i] = i
+		}
+	}
+	for _, i := range order {
 		r := &m.rules[i]
 		if !r.MatchesPass(textPass) {
 			continue
@@ -263,6 +294,16 @@ func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase i
 			gotMatch = false
 			continue
 		}
+		if r.Type == "use" {
+			// A use that misses does not block a later default at this level.
+			if !m.execUse(data, &r, off, flip, fullMsg, lastMime, depth) {
+				continue
+			}
+			gotMatch = true
+			matchedAny = true
+			m.walk(data, r.Children, plainBase, off, inUse, flip, fullMsg, lastMime, depth)
+			continue
+		}
 		gotMatch = true
 		matchedAny = true
 		m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime, depth)
@@ -273,7 +314,7 @@ func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase i
 // identifyAt runs the top-level tests as if the file began at base.
 // indirect rules use this to describe the bytes they point at.
 func (m *Magix) identifyAt(data []byte, base int64, fullMsg *strings.Builder, lastMime *string, depth int) {
-	for i := range m.rules {
+	for _, i := range m.binaryOrder {
 		matched, off, val := m.rules[i].MatchValue(data, base, true)
 		if !matched {
 			continue

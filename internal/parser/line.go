@@ -211,7 +211,9 @@ func isNumericType(typeStr string) bool {
 		"long", "belong", "lelong", "ubelong", "ulelong", "uint32",
 		"quad", "bequad", "lequad", "ubequad", "ulequad",
 		"date", "ldate", "bedate", "beldate", "ledate", "leldate", "medate", "meldate",
-		"qdate", "lqdate", "beqdate", "beqldate", "leqdate", "leqldate":
+		"qdate", "lqdate", "beqdate", "beqldate", "leqdate", "leqldate",
+		"msdosdate", "lemsdosdate", "bemsdosdate",
+		"msdostime", "lemsdostime", "bemsdostime":
 		return true
 	default:
 		return false

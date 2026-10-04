@@ -52,3 +52,7 @@ sgml
 varied.script
 # FIT map dates.
 map
+# Containers, after level-0 rules are ordered by strength.
+archive
+zip
+msooxml

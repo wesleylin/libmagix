@@ -276,7 +276,16 @@ func matchSearch(data []byte, r *Rule, offset int64) (bool, int64) {
 	}
 
 	idx := bytes.Index(data[offset:maxSearchEnd], pattern)
-	if idx == -1 || (r.SearchRange > 0 && int64(idx) >= r.SearchRange) {
+	found := idx != -1 && (r.SearchRange <= 0 || int64(idx) < r.SearchRange)
+	// "!" succeeds when the pattern is absent. Continuations stay at the
+	// start offset, since nothing was consumed.
+	if r.Operator == "!" {
+		if found {
+			return false, 0
+		}
+		return true, offset
+	}
+	if !found {
 		return false, 0
 	}
 	// Continuations are relative to the end of the match unless /s is set.
@@ -611,6 +620,17 @@ func findRegex(data []byte, r *Rule, offset int64) (string, int64, int64, bool) 
 		return "", 0, 0, false
 	}
 	end := regexEnd(data, offset, r)
+	// file hands the window to regexec. A C string ends at the first NUL,
+	// and the last byte of the window is overwritten with NUL so it is not
+	// part of the match. Bytes after that NUL, such as a ".png" later in a
+	// zip, are invisible.
+	if end > offset {
+		if nul := bytes.IndexByte(data[offset:end], 0); nul >= 0 {
+			end = offset + int64(nul)
+		} else {
+			end--
+		}
+	}
 	// file compiles with REG_NEWLINE: ^ and $ match at line edges, and a
 	// negated class does not consume a newline.
 	pat = "(?m)" + excludeNewline(pat)
@@ -703,12 +723,12 @@ func extractedNumber(data []byte, r *Rule, offset int64) (uint64, bool) {
 			return 0, false
 		}
 		actual = uint64(data[offset])
-	case "leshort", "uleshort", "uint16":
+	case "leshort", "uleshort", "uint16", "lemsdosdate", "lemsdostime":
 		if offset+2 > int64(len(data)) {
 			return 0, false
 		}
 		actual = uint64(binary.LittleEndian.Uint16(data[offset : offset+2]))
-	case "short", "beshort", "ubeshort":
+	case "short", "beshort", "ubeshort", "msdosdate", "msdostime", "bemsdosdate", "bemsdostime":
 		if offset+2 > int64(len(data)) {
 			return 0, false
 		}

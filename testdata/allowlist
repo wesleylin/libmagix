@@ -84,3 +84,10 @@ utf16xmlsvg
 fit-map-data
 regex-eol
 searchbug
+# Zip, Office, ARJ, and Keyman packages.
+HWP2016.hwpx.zip
+arj
+escapevel
+issue311docx
+issue359xlsx
+keyman-2
