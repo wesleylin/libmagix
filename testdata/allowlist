@@ -91,3 +91,5 @@ escapevel
 issue311docx
 issue359xlsx
 keyman-2
+# Hangul 5, stored as an OLE2 compound document.
+HWP2016.hwp

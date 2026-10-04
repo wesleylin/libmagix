@@ -207,7 +207,7 @@ func splitNumericOp(typeStr string) (string, string, uint64) {
 func isNumericType(typeStr string) bool {
 	switch typeStr {
 	case "byte", "ubyte",
-		"short", "beshort", "leshort", "ubeshort", "uleshort", "uint16",
+		"short", "beshort", "leshort", "ubeshort", "uleshort", "ushort", "uint16",
 		"long", "belong", "lelong", "ubelong", "ulelong", "uint32",
 		"quad", "bequad", "lequad", "ubequad", "ulequad",
 		"date", "ldate", "bedate", "beldate", "ledate", "leldate", "medate", "meldate",
@@ -435,7 +435,7 @@ func parseTypeValue(typeStr string, valueStr string) (any, error) {
 		}
 		return uint32(val), nil
 
-	case "short", "beshort", "leshort", "ubeshort", "uleshort", "uint16":
+	case "short", "beshort", "leshort", "ubeshort", "uleshort", "ushort", "uint16":
 		val, err := parseMagicUint(valueStr, 16)
 		if err != nil {
 			return nil, fmt.Errorf("invalid number for %s: %s", typeStr, valueStr)

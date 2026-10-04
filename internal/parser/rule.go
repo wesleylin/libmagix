@@ -183,7 +183,13 @@ func (r *Rule) MatchValue(data []byte, baseOffset int64, forcedRelative bool) (b
 			if !ok {
 				return false, 0, nil
 			}
-			return true, actualOffset, n
+			// Continuations are measured from the end of the field.
+			// A following "&511" is one byte short if a ubyte x stays put.
+			end := actualOffset
+			if sz := typeSize(r.Type); sz > 0 {
+				end += int64(sz)
+			}
+			return true, end, n
 		}
 		return true, actualOffset, r.printable(data, actualOffset)
 	}

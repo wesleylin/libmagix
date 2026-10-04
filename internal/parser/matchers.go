@@ -211,12 +211,10 @@ func matchUTF16LE(data []byte, r *Rule, offset int64) (bool, int64) {
 		binary.LittleEndian.PutUint16(pattern[i*2:], utf16Buf[i])
 	}
 
-	idx := bytes.Index(data[offset:], pattern)
-	if idx == -1 {
+	if !bytes.Equal(data[offset:offset+int64(patternLen)], pattern) {
 		return false, 0
 	}
-
-	return true, offset + int64(idx) + int64(len(pattern))
+	return true, offset + int64(patternLen)
 }
 
 // matchUTF16BE matches UTF-16 big-endian string rules against data
@@ -240,12 +238,10 @@ func matchUTF16BE(data []byte, r *Rule, offset int64) (bool, int64) {
 		binary.BigEndian.PutUint16(pattern[i*2:], u)
 	}
 
-	idx := bytes.Index(data[offset:], pattern)
-	if idx == -1 {
+	if int64(len(pattern))+offset > int64(len(data)) || !bytes.Equal(data[offset:offset+int64(len(pattern))], pattern) {
 		return false, 0
 	}
-
-	return true, offset + int64(idx) + int64(len(pattern))
+	return true, offset + int64(len(pattern))
 }
 
 // matchSearch matches search rules against data within a range.
@@ -483,6 +479,12 @@ func matchNumericHandler(data []byte, r *Rule, offset int64) (bool, int64) {
 			return false, 0
 		}
 		actual = uint64(binary.BigEndian.Uint16(data[offset : offset+2]))
+		stride = 2
+	case "ushort": // native-endian unsigned short
+		if offset+2 > int64(len(data)) {
+			return false, 0
+		}
+		actual = uint64(binary.NativeEndian.Uint16(data[offset : offset+2]))
 		stride = 2
 	case "leshort", "uleshort", "uint16": // Little Endian 2 bytes
 		if offset+2 > int64(len(data)) {
@@ -723,6 +725,11 @@ func extractedNumber(data []byte, r *Rule, offset int64) (uint64, bool) {
 			return 0, false
 		}
 		actual = uint64(data[offset])
+	case "ushort":
+		if offset+2 > int64(len(data)) {
+			return 0, false
+		}
+		actual = uint64(binary.NativeEndian.Uint16(data[offset : offset+2]))
 	case "leshort", "uleshort", "uint16", "lemsdosdate", "lemsdostime":
 		if offset+2 > int64(len(data)) {
 			return 0, false

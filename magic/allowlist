@@ -56,3 +56,5 @@ map
 archive
 zip
 msooxml
+# OLE2 compound documents.
+ole2compounddocs

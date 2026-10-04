@@ -117,7 +117,7 @@ func typeSize(t string) int {
 	switch t {
 	case "byte", "ubyte":
 		return 1
-	case "short", "beshort", "leshort", "ubeshort", "uleshort", "uint16",
+	case "short", "beshort", "leshort", "ubeshort", "uleshort", "ushort", "uint16",
 		"msdosdate", "lemsdosdate", "bemsdosdate",
 		"msdostime", "lemsdostime", "bemsdostime":
 		return 2

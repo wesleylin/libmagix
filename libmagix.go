@@ -134,6 +134,11 @@ func (m *Magix) identify(data []byte, cont bool) *Result {
 	if msg, ok := jsonMessage(data); ok {
 		return &Result{Message: msg}
 	}
+	// Compound documents are identified before magic, the way file_trycdf
+	// runs before the soft-magic pass.
+	if msg, ok := hwp5Document(data); ok {
+		return &Result{Message: msg}
+	}
 	view, code, textual := textView(data)
 	// A /b string is skipped when the bytes already look like text.
 	// The text pass then prints the /t description instead.
