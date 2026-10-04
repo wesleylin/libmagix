@@ -117,6 +117,20 @@ selinux
 ssh
 ssl
 yara
+# Structured data. der stays off: its tests use the der type, which is not implemented.
+a2ml
+ber
+cbor
+database
+dif
+gguf
+marc21
+numpy
+pbf
+psdbms
+sereal
+smile
+sql
 # Language source and bytecode. Matching is on content, not the filename.
 python
 perl

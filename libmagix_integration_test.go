@@ -692,6 +692,58 @@ func TestSecurityMagdir(t *testing.T) {
 	}
 }
 
+func TestDataMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sqlite := make([]byte, 80)
+	copy(sqlite, "SQLite format 3\x00")
+	sqlite[16], sqlite[17] = 0, 1
+	gguf := make([]byte, 24)
+	copy(gguf, "GGUF")
+	gguf[4] = 3
+	ber := make([]byte, 90)
+	ber[0] = 0x61
+	ber[2] = 0x64
+	copy(ber[4:], []byte{0x5f, 0x81, 0x44})
+	copy(ber[71:], []byte{0x5f, 0x81, 0x49, 0x01, 0x03, 0x5f, 0x81, 0x3d, 0x01, 12})
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "a2ml", data: []byte("@abstract: hello\n"), msg: "A2ML Attested Markup Language document"},
+		{name: "ber", data: ber, msg: "TAP 3.12 Batch (TD.57, Transferred Account)"},
+		{name: "cbor", data: []byte{0xd9, 0xd9, 0xf7, 0x00}, msg: "Concise Binary Object Representation (CBOR) container (positive integer)"},
+		{name: "gdbm", data: []byte{0x13, 0x57, 0x9a, 0xcd}, msg: "GNU dbm 1.x or ndbm database, big endian, 32-bit"},
+		{name: "gdbm2", data: []byte("GDBM"), msg: "GNU dbm 2.x database"},
+		{name: "dif", data: append(append([]byte("TABLE\n0,\n"), make([]byte, 40)...), []byte("TUPLES")...), msg: "Data Interchange Format"},
+		{name: "gguf", data: gguf, msg: "GGUF file format version 3, 0 tensors"},
+		{name: "marc21", data: append([]byte("00024na  a2200000   4500"), 0x1e), msg: "MARC21 Bibliographic"},
+		{name: "numpy", data: []byte{0x93, 'N', 'U', 'M', 'P', 'Y', 1, 0, 0, 0}, msg: "NumPy array, version 1.0, header length 0"},
+		{name: "pbf", data: []byte("\x00\x00\x00\x00\x0a\x09OSMHeader"), msg: "OpenStreetMap Protocolbuffer Binary Format"},
+		{name: "psdbms", data: append([]byte{0x56, 0x31, 0x00, 0x00}, "kern"...), msg: "ps database version 1 from kernel kern"},
+		{name: "sereal", data: []byte("=srl\x00\x00\x00\x00\x00"), msg: "Sereal data packet (version 0, uncompressed)"},
+		{name: "smile", data: []byte(":)\n\x00"), msg: "Smile binary data version 0: binary encoded, shared String values disabled, shared field names disabled"},
+		{name: "sqlite", data: sqlite, msg: "SQLite 3.x database, page size 65536, writer version 0, read version 0, maximum payload 0, minimum payload 0, leaf payload 0, file counter 0, database pages 0, cookie 0, schema 0, unknown 0 encoding"},
+		{name: "sqlite2", data: []byte("** This file contains an SQLite\n"), msg: "SQLite 2.x database"},
+		{name: "mysql", data: []byte{0xfe, 0x01, 10, 9}, msg: "MySQL table definition file Version 10, type MYISAM"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 // dwarfsImage is two section headers. The first has a zero section number
 // and type, no payload, so the next header sits at offset 0x40.
 func dwarfsImage() []byte {
