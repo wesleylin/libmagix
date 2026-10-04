@@ -50,6 +50,10 @@ wordprocessors
 scientific
 sgml
 varied.script
+# ELF and Java. Class files share 0xcafebabe with Mach-O, so they live in cafebabe.
+elf
+java
+cafebabe
 # Language source and bytecode. Matching is on content, not the filename.
 python
 perl

@@ -492,6 +492,11 @@ func TestUpstreamAllowlistIdentification(t *testing.T) {
 			msg:  "gzip compressed data, from Unix, original size modulo 2^32 3",
 			mime: "application/gzip",
 		},
+		{
+			file: "testdata/sample.elf",
+			msg:  "ELF 64-bit LSB executable, no machine, invalid version (SYSV)",
+			mime: "application/x-executable",
+		},
 	}
 
 	for _, tc := range cases {
@@ -501,6 +506,58 @@ func TestUpstreamAllowlistIdentification(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := engine.Identify(data)
+			if got == nil {
+				t.Fatal("Identify() = nil")
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+			if got.Mime != tc.mime {
+				t.Errorf("mime = %q, want %q", got.Mime, tc.mime)
+			}
+		})
+	}
+}
+
+func TestJavaMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+		mime string
+	}{
+		{
+			name: "class",
+			data: []byte{0xca, 0xfe, 0xba, 0xbe, 0x00, 0x00, 0x00, 0x34},
+			msg:  "compiled Java class data, version 52.0 (Java 1.8)",
+			mime: "application/x-java-applet",
+		},
+		{
+			name: "serialization",
+			data: []byte{0xac, 0xed, 0x00, 0x05},
+			msg:  "Java serialization data, version 5",
+		},
+		{
+			name: "keystore",
+			data: []byte{0xfe, 0xed, 0xfe, 0xed},
+			msg:  "Java KeyStore",
+			mime: "application/x-java-keystore",
+		},
+		{
+			name: "source",
+			data: []byte("import java.util.List;\n"),
+			msg:  "Java source, ASCII text",
+			mime: "text/x-java",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
 			if got == nil {
 				t.Fatal("Identify() = nil")
 			}
