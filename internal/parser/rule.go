@@ -344,6 +344,11 @@ func (r *Rule) resolveOffset(data []byte, baseOffset int64, forcedRelative bool)
 				return 0, false
 			}
 			pointerVal = int64(binary.LittleEndian.Uint32(data[ptrOff : ptrOff+4]))
+		case "long": // omitted type: file(1) FILE_LONG, 4-byte native
+			if ptrOff+4 > int64(len(data)) {
+				return 0, false
+			}
+			pointerVal = int64(binary.NativeEndian.Uint32(data[ptrOff : ptrOff+4]))
 		case "L": // big-endian long
 			if ptrOff+4 > int64(len(data)) {
 				return 0, false

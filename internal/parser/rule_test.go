@@ -298,6 +298,20 @@ func TestRule_ResolveOffset_IndirectAdjustment(t *testing.T) {
 	}
 }
 
+func TestRule_ResolveOffset_DefaultLongAddend(t *testing.T) {
+	// (0x38+0xcc) reads a native long at 0x38 and adds 0xcc.
+	rule, err := ParseLine(">>>(0x38+0xcc)\tstring\t>\\0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data := make([]byte, 0x40)
+	binary.NativeEndian.PutUint32(data[0x38:], 0x10)
+	got, ok := rule.resolveOffset(data, 0, false)
+	if !ok || got != 0x10+0xcc {
+		t.Fatalf("resolveOffset() = %v, %d; want %d", ok, got, 0x10+0xcc)
+	}
+}
+
 func TestRule_ResolveOffset_IndirectMultiply(t *testing.T) {
 	rule := Rule{
 		IsIndirect:        true,

@@ -167,8 +167,9 @@ dbpf
 games
 playdate
 puzzle
-# Science, CAD, and geo. bioinformatics and olf do not parse: bare (0x04) and (0x38+0xcc).
+# Science, CAD, and geo.
 asterix
+bioinformatics
 biosig
 cad
 dataone
@@ -181,6 +182,7 @@ kml
 lammps
 measure
 meteorological
+olf
 openfst
 psl
 sosi

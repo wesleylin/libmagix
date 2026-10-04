@@ -236,41 +236,37 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 	inner := raw[start+1 : end]
 	adjPart := raw[end+1:]
 
-	// 1. Handle inner (offset.type[+adj])
-	// Example: 0x3c.l or 0x3c.l+4
-	parts := strings.SplitN(inner, ".", 2)
-	if len(parts) < 2 {
+	// (offset[.type][+add]) reads a value at offset and uses it as the
+	// next offset. file(1) omits the type letter in (0x04) and (0x38+0xcc);
+	// the default is a 4-byte native long.
+	if strings.HasPrefix(inner, "&") {
+		ptrRelative = true
+		inner = inner[1:]
+	}
+	var rest string
+	ptrOff, rest, err = splitMagicNumber(inner)
+	if err != nil {
 		err = fmt.Errorf("invalid indirect offset inner part: %s", inner)
 		return
 	}
-
-	ptrRaw := parts[0]
-	if strings.HasPrefix(ptrRaw, "&") {
-		ptrRelative = true
-		ptrRaw = ptrRaw[1:]
+	ptrType = "long"
+	if rest != "" && (rest[0] == '.' || rest[0] == ',') {
+		rest = rest[1:]
+		if rest == "" {
+			err = fmt.Errorf("missing pointer type in: %s", raw)
+			return
+		}
+		ptrType = rest[:1]
+		rest = rest[1:]
 	}
-	ptrOff, err = strconv.ParseInt(ptrRaw, 0, 64)
-	if err != nil {
-		err = fmt.Errorf("invalid pointer offset: %v", err)
-		return
-	}
-
-	typeAndInnerAdd := parts[1]
-	if len(typeAndInnerAdd) == 0 {
-		err = fmt.Errorf("missing pointer type in: %s", raw)
-		return
-	}
-	ptrType = string(typeAndInnerAdd[0])
-
-	if len(typeAndInnerAdd) > 1 {
-		innerAdj := typeAndInnerAdd[1:]
-		if innerAdj != "" && strings.ContainsRune("+-*/%&|^", rune(innerAdj[0])) {
-			ptrOp = innerAdj[:1]
-			innerAdj = innerAdj[1:]
+	if rest != "" {
+		if strings.ContainsRune("+-*/%&|^", rune(rest[0])) {
+			ptrOp = rest[:1]
+			rest = rest[1:]
 		} else {
 			ptrOp = "+"
 		}
-		ptrArg, err = strconv.ParseInt(innerAdj, 0, 64)
+		ptrArg, err = strconv.ParseInt(rest, 0, 64)
 		if err != nil {
 			err = fmt.Errorf("invalid inner pointer adjustment: %v", err)
 			return
@@ -299,6 +295,44 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 	}
 
 	return
+}
+
+// splitMagicNumber reads a C integer prefix (decimal, 0x hex, or octal) and
+// returns the unparsed tail, such as ".l+4" or "+0xcc".
+func splitMagicNumber(s string) (int64, string, error) {
+	if s == "" {
+		return 0, "", fmt.Errorf("missing number")
+	}
+	i := 0
+	if s[0] == '+' || s[0] == '-' {
+		i++
+	}
+	if i >= len(s) {
+		return 0, "", fmt.Errorf("missing number")
+	}
+	if i+1 < len(s) && s[i] == '0' && (s[i+1] == 'x' || s[i+1] == 'X') {
+		i += 2
+		start := i
+		for i < len(s) && isHex(s[i]) {
+			i++
+		}
+		if i == start {
+			return 0, "", fmt.Errorf("missing hex digits")
+		}
+	} else {
+		start := i
+		for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+			i++
+		}
+		if i == start {
+			return 0, "", fmt.Errorf("missing digits")
+		}
+	}
+	n, err := strconv.ParseInt(s[:i], 0, 64)
+	if err != nil {
+		return 0, "", err
+	}
+	return n, s[i:], nil
 }
 
 // trimMagicLine drops unescaped leading and trailing space and tabs.
