@@ -77,6 +77,28 @@ isz
 luks
 partclone
 zfs
+# Media. matroska is the same 0x1a45dfa3 test as ebml, so it stays off.
+asf
+bm
+blender
+cddb
+chord
+cubemap
+dolby
+flash
+flif
+fonts
+gimp
+icc
+iff
+mup
+music
+pbm
+riff
+sketch
+subtitle
+sysex
+vorbis
 # Language source and bytecode. Matching is on content, not the filename.
 python
 perl

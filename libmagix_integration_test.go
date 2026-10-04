@@ -581,6 +581,63 @@ func TestDiskMagdir(t *testing.T) {
 	}
 }
 
+func TestMediaMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	xcf := make([]byte, 26)
+	copy(xcf, "gimp xcf file")
+	binary.BigEndian.PutUint32(xcf[14:], 0x0a00)
+	binary.BigEndian.PutUint32(xcf[18:], 0x1400)
+	icc := make([]byte, 44)
+	icc[26], icc[27] = 0, 1
+	copy(icc[36:], "acspAPPL")
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "asf", data: []byte{0x30, 0x26, 0xb2, 0x75, 0x8e, 0x66, 0xcf, 0x11, 0xa6, 0xd9, 0x00, 0xaa, 0x00, 0x62, 0xce, 0x6c}, msg: "Microsoft ASF"},
+		{name: "bm", data: append([]byte("bm\x01\xa4"), make([]byte, 20)...), msg: "Birtual Machine, version 0, program size 0, memory size 0"},
+		{name: "blender", data: append([]byte("BLENDER-v279"), make([]byte, 8)...), msg: "Blender3D pre-v5, saved as 64-bits little endian with version 2.79"},
+		{name: "cddb", data: []byte("# xmcd\n"), msg: "CDDB(tm) format CD text data, ASCII text"},
+		{name: "chord", data: []byte("{title foo}\n"), msg: "Chord text file"},
+		{name: "cubemap", data: []byte("CUBE"), msg: "Map file for cube and cube2 engine games"},
+		{name: "dolby", data: []byte{0x0b, 0x77, 0, 0, 0, 0}, msg: "ATSC A/52 aka AC-3 aka Dolby Digital stream, 48 kHz,, complete main (CM), 32 kbit/s"},
+		{name: "flash-flv", data: []byte("FLV\x01\x05\x00\x00\x00\x09"), msg: "Macromedia Flash Video"},
+		{name: "flash-swf", data: []byte{'F', 'W', 'S', 10, 20, 0, 0, 0, 0x08}, msg: "Macromedia Flash data, version 10"},
+		{name: "flif", data: append([]byte("FLIF31"), 0, 10, 0, 20), msg: "FLIF image data, 10x20, 8-bit/color,, RGB, non-interlaced"},
+		{name: "fonts-woff", data: append([]byte("wOFF"), make([]byte, 24)...), msg: "Web Open Font Format, flavor 0, length 0, version 0.0"},
+		{name: "fonts-otf", data: append([]byte("OTTO"), make([]byte, 16)...), msg: "OpenType font data"},
+		{name: "fonts-figlet", data: []byte("flf2a"), msg: "FIGlet font"},
+		{name: "gimp", data: xcf, msg: "GIMP XCF image data, version 0, 2560 x 5120, RGB Color"},
+		{name: "icc", data: icc, msg: "ColorSync color profile 0.0, - device, 0 bytes, 0-1-0"},
+		{name: "iff", data: []byte("FORM\x00\x00\x00\x00AIFF"), msg: "IFF data, AIFF audio"},
+		{name: "mup", data: []byte("//!Mup\n"), msg: "Mup music publication program input, ASCII text"},
+		{name: "music-bagpipe", data: []byte("Bagpipe Reader 1.0"), msg: "Bagpipe Reader (version 1.0)"},
+		{name: "music-brpp", data: []byte("BRPP"), msg: "Bars & Pipes Professional"},
+		{name: "pbm", data: []byte{0x2a, 0x17}, msg: `"compact bitmap" format (Poskanzer)`},
+		{name: "riff", data: append([]byte("RIFF"), 0, 0, 0, 0, 'W', 'A', 'V', 'E'), msg: "RIFF (little-endian) data, WAVE audio"},
+		{name: "sketch", data: []byte("##Sketch 1 2"), msg: "Sketch document, ASCII text, with no line terminators"},
+		{name: "subtitle", data: []byte("WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHi\n"), msg: "WebVTT subtitles, ASCII text"},
+		{name: "sysex", data: []byte{0xF0, 0x00, 0x01, 0xF7}, msg: "MIDI audio System Exclusive (SysEx) message - ID EXTENSIONS"},
+		{name: "vorbis", data: append(append([]byte("OggS"), make([]byte, 24)...), []byte("\x01vorbis")...), msg: "Ogg data, Vorbis audio,"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 // dwarfsImage is two section headers. The first has a zero section number
 // and type, no payload, so the next header sits at offset 0x40.
 func dwarfsImage() []byte {
