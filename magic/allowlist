@@ -278,6 +278,38 @@ typeset
 unicode
 uuencode
 varied.out
+# System files. weak stays off: every pattern is commented out.
+# unknown is last: its a.out tests are the soft matches.
+gconv
+glibc
+gnu
+magic
+sysstat
+terminfo
+timezone
+tuxedo
+virtual
+virtutech
+vmware
+unknown
+# Product formats. misctools is the grab bag.
+andrew
+aria
+bsi
+ccf
+citrus
+diamond
+island
+k9
+lif
+misctools
+nifty
+nitpicker
+ringdove
+sf3
+syd
+unisig
+vacuum-cleaner
 # Development tools and revision files.
 coverage
 ctags

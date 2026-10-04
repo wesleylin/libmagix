@@ -592,6 +592,7 @@ func TestMediaMagdir(t *testing.T) {
 	binary.BigEndian.PutUint32(xcf[14:], 0x0a00)
 	binary.BigEndian.PutUint32(xcf[18:], 0x1400)
 	icc := make([]byte, 44)
+	icc[4] = 1
 	icc[26], icc[27] = 0, 1
 	copy(icc[36:], "acspAPPL")
 	cases := []struct {
@@ -986,6 +987,82 @@ func TestTextMailMagdir(t *testing.T) {
 		{name: "unicode", data: []byte("+/v8\n"), msg: "Unicode text, UTF-7"},
 		{name: "uuencode", data: []byte("xbtoa Begin\n"), msg: "btoa'd, ASCII text"},
 		{name: "varied.out", data: []byte("Joy!peffpwpc"), msg: "header for PowerPC PEF executable"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
+func TestSystemProductMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	aria := append([]byte{0x00, 0x01}, make([]byte, 12)...)
+	aria = append(aria, 0, 0, 0, 0, 0, 0, 0, 1)
+	ccf := make([]byte, 32)
+	copy(ccf[8:], "@\xa5Z@_CCF")
+	ccf = append(ccf, []byte("CCF\x00")...)
+	lif := []byte{
+		0x80, 0x00, 'A', 'A', 'A', 'A', 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0,
+	}
+	vacuum := make([]byte, 44)
+	putLE := func(off int, v uint32) { binary.LittleEndian.PutUint32(vacuum[off:], v) }
+	putLE(0, 1)
+	putLE(4, 100)
+	putLE(8, 10000)
+	putLE(12, 50)
+	putLE(16, 50000)
+	putLE(20, 100)
+	putLE(24, 1000)
+	putLE(28, 1000)
+	putLE(32, 5)
+	putLE(36, 10)
+	putLE(40, 100)
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "gconv", data: []byte{0x24, 0x03, 0x01, 0x20}, msg: "gconv module configuration cache data"},
+		{name: "glibc", data: []byte{0x20, 0x07, 0x09, 0x20}, msg: "glibc locale file LC_CTYPE"},
+		{name: "gnu", data: []byte{0xde, 0x12, 0x04, 0x95}, msg: "GNU message catalog (little endian),"},
+		{name: "magic", data: []byte("# Magic \n"), msg: "magic text file for file(1) cmd, ASCII text"},
+		{name: "sysstat", data: []byte{0x96, 0xd5, 0x75, 0x21}, msg: "sysstat sar data (format 0x2175)"},
+		{name: "terminfo", data: []byte{0x01, 0x1b}, msg: "SVr2 curses screen image, big-endian"},
+		{name: "timezone", data: []byte("TZif\n"), msg: "timezone data(fat), version"},
+		{name: "tuxedo", data: append([]byte{0, 0, 1, 0x9e}, make([]byte, 12)...), msg: "BEA TUXEDO DES mask data"},
+		{name: "virtual", data: []byte("conectix\n"), msg: "Microsoft Disk Image, Virtual Server or Virtual PC"},
+		{name: "virtutech", data: []byte{0x89, 0xbf, 0x1e, 0x83}, msg: "Virtutech CRAFF"},
+		{name: "vmware", data: []byte("MRVN"), msg: "VMware nvram"},
+		{name: "unknown", data: []byte{0x00, 0x00, 0x01, 0x0c}, msg: "unknown demand paged pure executable"},
+		{name: "andrew", data: []byte("\\begindata{raster,\n"), msg: "Andrew Toolkit raster image data"},
+		{name: "aria", data: aria, msg: "aria2 control file, version 1, piece length 0x0, total length 1"},
+		{name: "bsi", data: []byte("XIA1\r\n"), msg: "Chiasmus Encrypted data"},
+		{name: "ccf", data: ccf, msg: "Philips Pronto IR remote control CCF"},
+		{name: "citrus", data: []byte("RuneCT\n"), msg: "Citrus locale declaration for LC_CTYPE"},
+		{name: "diamond", data: []byte("<list>\n<protocol bbn-m\n"), msg: "Diamond Multimedia Document"},
+		{name: "island", data: append([]byte{0, 0, 0, 0}, []byte("pgscriptver")...), msg: "IslandWrite document"},
+		{name: "k9", data: []byte("K9!\n"), msg: "K9 Self-Validating Component"},
+		{name: "lif", data: lif, msg: "lif file \"AAAA\", version 0, LIF identifier 0, directory start address 0 length 0"},
+		{name: "misctools", data: []byte("%%!!\n"), msg: "X-Post-It-Note, ASCII text"},
+		{name: "nifty", data: []byte("\x00\x00\x00\x00n+2\x00\r\n\x1a\n"), msg: "NIfTI-2 neuroimaging data, invalid sizeof_hdr=0"},
+		{name: "nitpicker", data: []byte("NPFF\n"), msg: "NItpicker Flow File V10."},
+		{name: "ringdove", data: []byte("Netlist(Freeze)\n"), msg: "pcb-rnd or gEDA/PCB netlist forward annotation action script, ASCII text"},
+		{name: "sf3", data: []byte{0x81, 'S', 'F', '3', 0x00, 0xe0, 0xd0, 0x0d, 0x0a, 0x0a}, msg: "SF3"},
+		{name: "syd", data: []byte("\x7fSYD\n"), msg: "SYD encrypted file, version 10"},
+		{name: "unisig", data: []byte{0xdc, 0xdc, 0x0d, 0x0a, 0x1a, 0x0a, 0x00}, msg: "Unisig:"},
+		{name: "vacuum-cleaner", data: vacuum, msg: "LG robot VR6[234]xx 5m^2 navigation"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
