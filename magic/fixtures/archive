@@ -1,0 +1,5 @@
+0	string		PK\003\004	Zip archive data
+>30	search/4000	[Content_Types].xml	\b, Microsoft Office Open XML
+>>0	search/500	word/			\b Microsoft Word document
+>>0	search/500	xl/			\b Microsoft Excel document
+>>0	search/500	ppt/			\b Microsoft PowerPoint document
