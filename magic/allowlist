@@ -131,6 +131,15 @@ psdbms
 sereal
 smile
 sql
+# Packages, patches, and tape images. pack does not parse: (56) is not an indirect offset.
+apt
+burp
+dact
+nix
+pkgadd
+tapebackup
+warc
+xdelta
 # Language source and bytecode. Matching is on content, not the filename.
 python
 perl

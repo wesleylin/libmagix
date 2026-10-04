@@ -744,6 +744,52 @@ func TestDataMagdir(t *testing.T) {
 	}
 }
 
+func TestArchiveMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	arc := make([]byte, 516)
+	binary.LittleEndian.PutUint32(arc[0:], 0xdddddddd)
+	binary.LittleEndian.PutUint32(arc[512:], 0xabbaabba)
+	nova := make([]byte, 56)
+	nova = append(nova, []byte("<<NoVaStOr>>")...)
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "apt", data: []byte{0x98, 0xfe, 0x76, 0xdc, 0, 0, 0, 0, 0, 0, 0, 0}, msg: "APT cache data, version 0.0, 32 bit big-endian"},
+		{name: "burp", data: []byte{0x66, 0x85, 0x82, 0x80, 0, 0, 0, 1}, msg: "Burp project save file"},
+		{name: "dact", data: []byte{0x44, 0x43, 0x54, 0xc3, 1, 2, 3}, msg: "DACT compressed data"},
+		{name: "nix", data: []byte("{\nstdenv.mkDerivation {\n"), msg: "Nix package definition"},
+		{name: "pkgadd", data: []byte("# PaCkAgE DaTaStReAm\n"), msg: "pkg Datastream (SVR4)"},
+		{name: "qic", data: append([]byte("VTBL"), append(make([]byte, 4), []byte("backup")...)...), msg: "QIC-80 tape volume header, Volume label: backup"},
+		{name: "colorado", data: []byte{0x55, 0xaa, 0x55, 0xaa, 2, 0, 0, 0}, msg: "Colorado tape backup"},
+		{name: "novastor", data: nova, msg: "NovaStor tape backup"},
+		{name: "arcserve", data: arc, msg: "ArcServe tape backup"},
+		{name: "savlib", data: []byte{0xff, 0xff, 0xff, 0xff, 0xd8, 0xe2, 0xd9, 0xc4}, msg: "AS/400 SAVLIB backup"},
+		{name: "txplus", data: []byte{0x3a, 0x3a, 0x3a, 0x3a, 0, 0, 0, 0, 0, 0, 0, 0, 0x20, 0x3a, 0x3a, 0x3a}, msg: "TXPLUS tape backup"},
+		{name: "mountain", data: []byte{0x04, 0x00, 0xaa, 0x55}, msg: "Mountain FileSafe tape backup"},
+		{name: "warc", data: []byte("WARC/1.0\n"), msg: "WARC Archive version 1.0"},
+		{name: "ia-arc", data: []byte("filedesc://\n2"), msg: "Internet Archive File version 2"},
+		{name: "xdelta", data: []byte("%XDZ004%"), msg: "XDelta binary patch file 1.1"},
+		{name: "vcdiff", data: []byte{0xd6, 0xc3, 0xc4, 0x00}, msg: "VCDIFF binary diff"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 // dwarfsImage is two section headers. The first has a zero section number
 // and type, no payload, so the next header sits at offset 0x40.
 func dwarfsImage() []byte {
