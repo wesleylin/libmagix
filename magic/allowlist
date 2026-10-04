@@ -140,6 +140,18 @@ pkgadd
 tapebackup
 warc
 xdelta
+# Development tools and revision files.
+coverage
+ctags
+ctf
+git
+mercurial
+mkid
+modulefile
+project
+revision
+sccs
+spec
 # More language source and bytecode.
 algol68
 apl

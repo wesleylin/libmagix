@@ -790,6 +790,42 @@ func TestArchiveMagdir(t *testing.T) {
 	}
 }
 
+func TestDevtoolMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "coverage", data: []byte{0x6f, 0x6e, 0x63, 0x67, 0, 0x41, 0, 0x42}, msg: "GCC gcno coverage (-ftest-coverage), version B.A"},
+		{name: "ctags", data: []byte("!_TAG_FILE_FORMAT\t2\n"), msg: "Exuberant Ctags tag file, ASCII text"},
+		{name: "ctf", data: []byte{0xc1, 0x1f, 0xfc, 0xc1}, msg: "Common Trace Format (CTF) trace data (LE)"},
+		{name: "git", data: []byte("blob 1\n"), msg: "Git blob 1"},
+		{name: "mercurial", data: []byte("HG10"), msg: "Mercurial changeset bundle"},
+		{name: "mkid", data: []byte{0xc9, 0xc4}, msg: "ID tags data"},
+		{name: "modulefile", data: []byte("#%Module\n"), msg: "modulefile"},
+		{name: "project", data: []byte("FTNCHEK_ PROJECT\n"), msg: "project file for ftnchek"},
+		{name: "revision", data: []byte{'D', 'I', 'R', 'C', 0, 0, 0, 2, 0, 0, 0, 1}, msg: "Git index, version 2, 1 entries"},
+		{name: "sccs", data: []byte("\x01h01207\n\x01s "), msg: "SCCS v4 archive data"},
+		{name: "spec", data: []byte("BEGIN SPECWEB"), msg: "SPECweb"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 func TestMoreLanguages(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	engine, err := libmagix.New("magic/Magdir", logger)
