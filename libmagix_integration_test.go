@@ -519,6 +519,59 @@ func TestUpstreamAllowlistIdentification(t *testing.T) {
 	}
 }
 
+func TestExecutableMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zeros := make([]byte, 40)
+	put := func(n int, b ...byte) []byte {
+		t.Helper()
+		data := append([]byte(nil), zeros...)
+		copy(data, b)
+		if n > len(data) {
+			data = append(data, make([]byte, n-len(data))...)
+		}
+		return data
+	}
+	coff := make([]byte, 24)
+	coff[0], coff[1], coff[2] = 0xf0, 0x01, 1
+	arm := make([]byte, 24)
+	arm[0], arm[1], arm[2] = 0x64, 0xaa, 1
+	mips := make([]byte, 24)
+	mips[0], mips[1], mips[17] = 0x01, 0x60, 56
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "aout", data: put(4, 0x07, 0x01, 0x00, 0x00), msg: "a.out little-endian 32-bit executable"},
+		{name: "bflt", data: append([]byte("bFLT"), 0, 0, 0, 4), msg: "BFLT executable - version 4"},
+		{name: "gcc", data: []byte("gpchC014"), msg: "GCC precompiled header (version 014) for C"},
+		{name: "llvm", data: []byte{'B', 'C', 0xc0, 0xde}, msg: "LLVM IR bitcode"},
+		{name: "wasm", data: []byte{0, 'a', 's', 'm', 1, 0, 0, 0}, msg: "WebAssembly (wasm) binary version 0x1 (MVP module)"},
+		{name: "xo65", data: []byte{'U', 'z', 'n', 'a', 1, 0, 0, 0}, msg: "xo65 object, version 1, no debug info"},
+		{name: "mach", data: []byte{0xce, 0xfa, 0xed, 0xfe, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0}, msg: "Mach-O executable"},
+		{name: "coff", data: coff, msg: "PowerPC 32-bit (little-endian) COFF object file, not stripped, 1 section, 1st section name \"\""},
+		{name: "arm", data: arm, msg: "ARM64 COFF object file, not stripped, 1 section, 1st section name \"\""},
+		{name: "mips", data: mips, msg: "MIPSEB ECOFF executable stripped - version 0.0"},
+		{name: "msvc", data: []byte{'H', 'W', 'B', 0, 0xff, 1, 0, 0, 0}, msg: "Microsoft Visual C .APS file"},
+		{name: "intel", data: []byte{0x48, 0x01}, msg: "x86 executable"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 func TestJavaMagdir(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	engine, err := libmagix.New("magic/Magdir", logger)

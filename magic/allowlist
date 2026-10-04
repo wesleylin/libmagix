@@ -54,6 +54,19 @@ varied.script
 elf
 java
 cafebabe
+# Other object and executable fragments. arm and mips call coff's display-coff.
+aout
+arm
+bflt
+coff
+gcc
+intel
+llvm
+mach
+mips
+msvc
+webassembly
+xo65
 # Language source and bytecode. Matching is on content, not the filename.
 python
 perl
