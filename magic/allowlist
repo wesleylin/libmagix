@@ -140,6 +140,27 @@ pkgadd
 tapebackup
 warc
 xdelta
+# More language source and bytecode.
+algol68
+apl
+assembler
+clarion
+clipper
+clojure
+erlang
+etf
+forth
+inform
+lex
+m4
+maple
+mathematica
+nim-lang
+ocaml
+parrot
+polyml
+r
+smalltalk
 # Language source and bytecode. Matching is on content, not the filename.
 python
 perl

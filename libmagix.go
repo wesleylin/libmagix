@@ -278,6 +278,10 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relati
 // Inside a subroutine, direct offsets stay relative to plainBase (the use).
 // '&' offsets stay relative to relativeBase (the end of the previous match).
 func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase int64, inUse, flip bool, fullMsg *strings.Builder, lastMime *string, anchored *bool, depth int) bool {
+	// A named block whose only content is its description has already matched.
+	if len(rules) == 0 {
+		return true
+	}
 	gotMatch := false
 	matchedAny := false
 	for i := range rules {
