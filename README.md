@@ -2,75 +2,81 @@
 
 # libmagix
 
-A lightweight, pure Go implementation of the `libmagic` file identification engine. `libmagix` parses standard magic files and builds a recursive rule tree to identify file types and MIME types based on binary signatures.
+A pure Go file identification engine, in the style of `libmagic`. It parses magic definitions and matches them against file bytes. The `magix` command ships with an embedded [file(1) Magdir](https://github.com/file/file/tree/master/magic/Magdir) database.
 
-## Features
+## Install
 
-- **Tree-based Matching:** Implements hierarchical matching (Levels 0, 1, 2+) for high precision (e.g., identifying a `.docx` inside a generic Zip structure).
-- **Pure Go:** No CGO dependencies. Easy to cross-compile.
-- **Magdir Compatible:** Designed to load and parse standard magic definition files.
+Download a release from [GitHub Releases](https://github.com/wesleylin/libmagix/releases). Each archive contains the `magix` binary.
 
-## Installation
+| File | System |
+| --- | --- |
+| `libmagix_darwin_arm64.tar.gz` | macOS, Apple Silicon |
+| `libmagix_darwin_amd64.tar.gz` | macOS, Intel |
+| `libmagix_linux_arm64.tar.gz` | Linux, arm64 |
+| `libmagix_linux_amd64.tar.gz` | Linux, amd64 |
+| `libmagix_windows_arm64.zip` | Windows, arm64 |
+| `libmagix_windows_amd64.zip` | Windows, amd64 |
+
+On macOS or Linux:
 
 ```bash
-go get [github.com/wesleylin/libmagix](https://github.com/wesleylin/libmagix)
-
-go test ./...
+tar -xzf libmagix_darwin_arm64.tar.gz
+./magix testdata/sample.pdf
 ```
 
-## Quick start
+Or install with Go:
+
+```bash
+go install github.com/wesleylin/libmagix/cmd/magix@latest
+```
+
+The binary uses the embedded database. Pass `-m` to load a magic file or directory from disk instead.
 
 ```
+magix [-v] [-b] [-i] [-m magic] file...
+```
+
+- `-b` prints the description without the filename
+- `-i` prints the MIME type
+- `-m` loads a magic file or directory from disk
+- `-v` prints debug logs
+
+## Library
+
+```bash
+go get github.com/wesleylin/libmagix
+```
+
+`New` loads a magic file or a directory from disk. A directory named `Magdir` is limited to the names listed in a sibling `allowlist` file.
+
+```go
 package main
 
 import (
-    "fmt"
-    "[github.com/wesleylin/libmagix](https://github.com/wesleylin/libmagix)"
+	"fmt"
+
+	"github.com/wesleylin/libmagix"
 )
 
 func main() {
-    // 1. Initialize the engine by pointing to your magic definitions folder
-    m, err := libmagix.New("./magic/Magdir")
-    if err != nil {
-        panic(err)
-    }
+	m, err := libmagix.New("magic/Magdir", nil)
+	if err != nil {
+		panic(err)
+	}
 
-    // 2. Provide some file bytes
-    data := []byte("%PDF-1.4\n...")
-
-    // 3. Identify the file
-    result := m.Identify(data)
-    if result != nil {
-        fmt.Printf("Description: %s\n", result.Message)
-        fmt.Printf("MIME Type:   %s\n", result.Mime)
-    } else {
-        fmt.Println("Unknown file type")
-    }
+	result := m.Identify([]byte("%PDF-1.4\n"))
+	if result == nil {
+		fmt.Println("unknown")
+		return
+	}
+	fmt.Println(result.Message)
+	fmt.Println(result.Mime)
 }
 ```
 
-running
+From this repo:
 
+```bash
+go test ./...
 go run ./cmd/magix testdata/sample.docx
-
-## How it Works
-
-libmagix follows a three-step process to identify files:
-
-1. Loading: The Loader walks through a directory of magic files.
-2. Parsing: The Parser converts flat magic lines into a recursive Rule tree.
-3. Matching: The Engine performs a depth-first search on the tree, checking byte offsets and values against the input data.
-
-magic files come from https://github.com/file/file/tree/master/magic/Magdir
-
-## Supported Features
-
-The engine is generic and follows the `libmagic` specification. While it can theoretically parse any rule, it currently has only been tested for PDFs, ELF binaries, BMP images, and Shell scripts.
-
-## Supported Types
-
-Currently supports:
-
-- string (exact byte sequence matching)
-- !:mime (MIME type attribution)
-- In Progress: belong, lelong, short, byte
+```
