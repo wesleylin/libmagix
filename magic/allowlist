@@ -50,6 +50,18 @@ wordprocessors
 scientific
 sgml
 varied.script
+# Language source and bytecode. Matching is on content, not the filename.
+python
+perl
+ruby
+rust
+javascript
+lua
+lisp
+tcl
+c-lang
+fortran
+pascal
 # FIT map dates.
 map
 # Containers, after level-0 rules are ordered by strength.

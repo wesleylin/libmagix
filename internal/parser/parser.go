@@ -35,7 +35,7 @@ func (p *Parser) Parse(r io.Reader) ([]Rule, error) {
 	lineNum := 0
 
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		line := trimMagicLine(scanner.Text())
 		lineNum++
 
 		if line == "" || strings.HasPrefix(line, "#") {

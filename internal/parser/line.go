@@ -9,7 +9,7 @@ import (
 
 // ParseLine processes a single raw line from a magic file.
 func ParseLine(line string) (*Rule, error) {
-	line = strings.TrimSpace(line)
+	line = trimMagicLine(line)
 	if line == "" || strings.HasPrefix(line, "#") {
 		return nil, nil
 	}
@@ -299,6 +299,32 @@ func parseOffset(raw string) (offset int64, isIndirect bool, ptrOff int64, ptrTy
 	}
 
 	return
+}
+
+// trimMagicLine drops unescaped leading and trailing space and tabs.
+// A trailing "\ " is part of the value, as in the Python "def\ " test.
+func trimMagicLine(s string) string {
+	i := 0
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r') {
+		i++
+	}
+	s = s[i:]
+	end := len(s)
+	for end > 0 {
+		c := s[end-1]
+		if c != ' ' && c != '\t' && c != '\r' {
+			break
+		}
+		n := 0
+		for j := end - 2; j >= 0 && s[j] == '\\'; j-- {
+			n++
+		}
+		if n%2 == 1 {
+			break
+		}
+		end--
+	}
+	return s[:end]
 }
 
 // unescapeMagic decodes magic string escapes. Octal runs are one to three

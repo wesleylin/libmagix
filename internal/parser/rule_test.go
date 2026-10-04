@@ -319,6 +319,27 @@ func TestRule_ResolveOffset_IndirectMultiply(t *testing.T) {
 	}
 }
 
+func TestRule_EscapedTrailingSpace(t *testing.T) {
+	rule, err := ParseLine("0\tsearch/8192\tdef\\ ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rule.Value != "def " {
+		t.Fatalf("value = %q, want %q", rule.Value, "def ")
+	}
+}
+
+func TestRule_SearchOptionalWhitespace(t *testing.T) {
+	rule, err := ParseLine("0\tsearch/10/w\t#!\\040/usr/bin/env\\040python\tPython script text executable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := rule.Match([]byte("#!/usr/bin/env python3\n"), 0, false)
+	if !got {
+		t.Fatal("search/w did not match a shebang with no space after #!")
+	}
+}
+
 func TestRule_SearchRangeIncludesPattern(t *testing.T) {
 	rule := Rule{Type: "search", SearchRange: 1, Value: "P2", Operator: "="}
 	got, off := rule.Match([]byte("P2\n2 2\n"), 0, false)

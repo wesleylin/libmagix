@@ -257,6 +257,7 @@ func matchSearch(data []byte, r *Rule, offset int64) (bool, int64) {
 
 	pattern := []byte(valStr)
 	maxSearchEnd := int64(len(data))
+	spaced := r.StringFlags&(StringOptionalWhitespace|StringCompactWhitespace|StringIgnoreLower|StringIgnoreUpper) != 0
 
 	// The range counts starting positions. The pattern may extend past it,
 	// which is why search/1 can match a string longer than one byte.
@@ -271,8 +272,24 @@ func matchSearch(data []byte, r *Rule, offset int64) (bool, int64) {
 		return false, 0
 	}
 
-	idx := bytes.Index(data[offset:maxSearchEnd], pattern)
-	found := idx != -1 && (r.SearchRange <= 0 || int64(idx) < r.SearchRange)
+	var idx int
+	found := false
+	if spaced {
+		limit := int(maxSearchEnd - offset)
+		if r.SearchRange > 0 && int(r.SearchRange) < limit {
+			limit = int(r.SearchRange)
+		}
+		for i := 0; i < limit; i++ {
+			if matchSpaced(data[offset+int64(i):], pattern, r.StringFlags) {
+				idx = i
+				found = true
+				break
+			}
+		}
+	} else {
+		idx = bytes.Index(data[offset:maxSearchEnd], pattern)
+		found = idx != -1 && (r.SearchRange <= 0 || int64(idx) < r.SearchRange)
+	}
 	// "!" succeeds when the pattern is absent. Continuations stay at the
 	// start offset, since nothing was consumed.
 	if r.Operator == "!" {
