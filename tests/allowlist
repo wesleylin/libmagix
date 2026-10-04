@@ -93,3 +93,17 @@ issue359xlsx
 keyman-2
 # Hangul 5, stored as an OLE2 compound document.
 HWP2016.hwp
+# Zstandard frames with no dictionary, dictionaries, and skippable frames.
+zstd-v0.7-00
+zstd-v0.8-00
+zstd-dictionary-0
+zstd-dictionary-1
+zstd-dictionary-2
+zstd-skippable-frame-0
+zstd-skippable-frame-4
+zstd-skippable-frame-8
+zstd-skippable-frame-C
+zstd-3-skippable-frames
+# Empty OpenPGP key files.
+pgp-binary-key-v4-ecc-rev
+pgp-binary-key-v4-rsa-no-userid-rev

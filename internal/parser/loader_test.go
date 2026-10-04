@@ -69,7 +69,7 @@ func TestLoadDirectory(t *testing.T) {
 
 func TestAllowlistSkipsUnlistedFiles(t *testing.T) {
 	root := t.TempDir()
-	magdir := filepath.Join(root, "upstream", "Magdir")
+	magdir := filepath.Join(root, "Magdir")
 	if err := os.MkdirAll(magdir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestAllowlistSkipsUnlistedFiles(t *testing.T) {
 
 func TestAllowlistParseError(t *testing.T) {
 	root := t.TempDir()
-	magdir := filepath.Join(root, "upstream", "Magdir")
+	magdir := filepath.Join(root, "Magdir")
 	if err := os.MkdirAll(magdir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestAllowlistParseError(t *testing.T) {
 
 func TestVendoredAllowlistParses(t *testing.T) {
 	p := NewParser(slog.New(slog.DiscardHandler))
-	rules, err := p.LoadDirectory("../../magic/upstream/Magdir")
+	rules, err := p.LoadDirectory("../../magic/Magdir")
 	if err != nil {
 		t.Fatalf("LoadDirectory: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestVendoredAllowlistParses(t *testing.T) {
 }
 
 func TestBundledMagicParses(t *testing.T) {
-	matches, err := filepath.Glob("../../magic/Magdir/*")
+	matches, err := filepath.Glob("../../magic/fixtures/*")
 	if err != nil {
 		t.Fatal(err)
 	}

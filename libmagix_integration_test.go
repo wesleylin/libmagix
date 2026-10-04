@@ -30,7 +30,7 @@ func TestGIFIdentification(t *testing.T) {
 
 	// 2. Initialize the engine using the public API
 	// This points to our tiny test magic file
-	engine, err := libmagix.New("magic/Magdir/basicGif", logger)
+	engine, err := libmagix.New("magic/fixtures/basicGif", logger)
 	if err != nil {
 		t.Fatalf("Failed to initialize engine: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestGIFIdentification(t *testing.T) {
 func TestJavaIdentification(t *testing.T) {
 	// 1. Initialize engine
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/java", logger)
+	engine, err := libmagix.New("magic/fixtures/java", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestHighVersionIdentification(t *testing.T) {
 func TestELFIdentification(t *testing.T) {
 	// 1. Initialize engine
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/elf", logger)
+	engine, err := libmagix.New("magic/fixtures/elf", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -146,7 +146,7 @@ func TestELFIdentification(t *testing.T) {
 func TestBMPIdentificationTemp(t *testing.T) {
 	// 1. Initialize engine
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/bmp", logger)
+	engine, err := libmagix.New("magic/fixtures/bmp", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -173,7 +173,7 @@ func TestBMPIdentificationTemp(t *testing.T) {
 func TestBMPIdentificationSample(t *testing.T) {
 	// 1. Initialize engine
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/bmp", logger)
+	engine, err := libmagix.New("magic/fixtures/bmp", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestBMPIdentificationSample(t *testing.T) {
 func TestScriptIdentification(t *testing.T) {
 	// 1. Initialize engine
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/script", logger)
+	engine, err := libmagix.New("magic/fixtures/script", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestScriptIdentification(t *testing.T) {
 func TestPEIdentification(t *testing.T) {
 	// 1. Initialize engine
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/pe", logger)
+	engine, err := libmagix.New("magic/fixtures/pe", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -258,7 +258,7 @@ func TestPEIdentification(t *testing.T) {
 func TestTIFFIdentificationMock(t *testing.T) {
 	// 1. Initialize engine
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/tiff", logger)
+	engine, err := libmagix.New("magic/fixtures/tiff", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -281,7 +281,7 @@ func TestTIFFIdentificationMock(t *testing.T) {
 func TestTIFFIdentificationSample(t *testing.T) {
 	// 1. Initialize engine
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/tiff", logger)
+	engine, err := libmagix.New("magic/fixtures/tiff", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestTIFFIdentificationSample(t *testing.T) {
 
 func TestZipIdentification(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/archive", logger)
+	engine, err := libmagix.New("magic/fixtures/archive", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -326,7 +326,7 @@ func TestZipIdentification(t *testing.T) {
 
 func TestOOXMLIdentificationMock(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/archive", logger)
+	engine, err := libmagix.New("magic/fixtures/archive", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestOOXMLIdentificationMock(t *testing.T) {
 
 func TestSubroutineIdentification(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/subroutines", logger)
+	engine, err := libmagix.New("magic/fixtures/subroutines", logger)
 	if err != nil {
 		t.Fatalf("Failed to init: %v", err)
 	}
@@ -371,7 +371,7 @@ func TestSubroutineIdentification(t *testing.T) {
 
 func TestStarOfficeIdentification(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
-	engine, err := libmagix.New("magic/Magdir/wordprocessorOfficial", logger)
+	engine, err := libmagix.New("magic/fixtures/wordprocessorOfficial", logger)
 	if err != nil {
 		t.Fatalf("Failed to load official magic: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestDescriptionFormatting(t *testing.T) {
 
 func TestUpstreamAllowlistIdentification(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	engine, err := libmagix.New("magic/upstream/Magdir", logger)
+	engine, err := libmagix.New("magic/Magdir", logger)
 	if err != nil {
 		t.Fatalf("load allowlisted Magdir: %v", err)
 	}
@@ -516,7 +516,7 @@ func TestUpstreamAllowlistIdentification(t *testing.T) {
 
 func TestEasyAllowlistSignatures(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	engine, err := libmagix.New("magic/upstream/Magdir", logger)
+	engine, err := libmagix.New("magic/Magdir", logger)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -528,7 +528,7 @@ func TestEasyAllowlistSignatures(t *testing.T) {
 	}
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
-			rules, err := p.LoadFile(filepath.Join("magic/upstream/Magdir", name))
+			rules, err := p.LoadFile(filepath.Join("magic/Magdir", name))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -597,34 +597,34 @@ func signatureBytes(r *parser.Rule) ([]byte, bool) {
 
 func TestUpstreamFileSamples(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	engine, err := libmagix.New("magic/upstream/Magdir", logger)
+	engine, err := libmagix.New("magic/Magdir", logger)
 	if err != nil {
 		t.Fatal(err)
 	}
-	names := readNameList(t, "testdata/allowlist")
+	names := readNameList(t, "tests/allowlist")
 	if len(names) == 0 {
-		t.Fatal("testdata/allowlist is empty")
+		t.Fatal("tests/allowlist is empty")
 	}
 	for _, name := range names {
 		t.Run(name, func(t *testing.T) {
-			data, err := os.ReadFile(filepath.Join("testdata/upstream", name+".testfile"))
+			data, err := os.ReadFile(filepath.Join("tests", name+".testfile"))
 			if err != nil {
 				t.Fatal(err)
 			}
-			wantBytes, err := os.ReadFile(filepath.Join("testdata/upstream", name+".result"))
+			wantBytes, err := os.ReadFile(filepath.Join("tests", name+".result"))
 			if err != nil {
 				t.Fatal(err)
 			}
 			want := strings.TrimRight(string(wantBytes), "\n")
 			eng := engine
-			if paths, err := filepath.Glob(filepath.Join("testdata/upstream", name+"*.magic")); err == nil && len(paths) > 0 {
+			if paths, err := filepath.Glob(filepath.Join("tests", name+"*.magic")); err == nil && len(paths) > 0 {
 				eng, err = libmagix.NewFiles(paths, logger)
 				if err != nil {
 					t.Fatal(err)
 				}
 			}
 			var got *libmagix.Result
-			if continueFlags(filepath.Join("testdata/upstream", name+".flags")) {
+			if continueFlags(filepath.Join("tests", name+".flags")) {
 				got = eng.IdentifyContinue(data)
 			} else {
 				got = eng.Identify(data)

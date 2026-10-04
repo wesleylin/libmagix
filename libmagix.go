@@ -131,6 +131,10 @@ func (m *Magix) IdentifyContinue(data []byte) *Result {
 // A binary hit is the whole answer. Otherwise the text pass runs on
 // ASCII or decoded UTF-16 and the encoding phrase is appended.
 func (m *Magix) identify(data []byte, cont bool) *Result {
+	// An empty buffer is reported before JSON or magic.
+	if len(data) == 0 {
+		return &Result{Message: "File is empty."}
+	}
 	if msg, ok := jsonMessage(data); ok {
 		return &Result{Message: msg}
 	}
@@ -240,7 +244,10 @@ func joinHits(hits []hit) (string, string) {
 func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relativeBase int64, inUse bool, val any, flip bool, fullMsg *strings.Builder, lastMime *string, depth int) {
 	if r.Type == "indirect" {
 		appendMagicText(fullMsg, parser.FormatMessage(r.Message, r.Type, val))
-		if depth < 2 {
+		// file stops an indirect chain at FILE_INDIR_MAX (50). Three
+		// skippable frames sit in front of one zstd frame, and each
+		// frame takes one hop.
+		if depth < 50 {
 			m.identifyAt(data, relativeBase, fullMsg, lastMime, depth+1)
 		}
 		m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, depth)
@@ -316,17 +323,23 @@ func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase i
 	return matchedAny
 }
 
-// identifyAt runs the top-level tests as if the file began at base.
-// indirect rules use this to describe the bytes they point at.
+// identifyAt runs the top-level tests on the bytes that begin at base.
+// indirect rules use this to describe the bytes they point at. file
+// copies that tail into its own buffer, so a nested "(4.l+8)" is
+// measured from there.
 func (m *Magix) identifyAt(data []byte, base int64, fullMsg *strings.Builder, lastMime *string, depth int) {
+	if base < 0 || base > int64(len(data)) {
+		return
+	}
+	view := data[base:]
 	for _, i := range m.binaryOrder {
-		matched, off, val := m.rules[i].MatchValue(data, base, true)
+		matched, off, val := m.rules[i].MatchValue(view, 0, false)
 		if !matched {
 			continue
 		}
 		var nested strings.Builder
 		var mime string
-		m.identifyRecursive(data, &m.rules[i], base, off, true, val, false, &nested, &mime, depth)
+		m.identifyRecursive(view, &m.rules[i], 0, off, false, val, false, &nested, &mime, depth)
 		if strings.TrimSpace(nested.String()) == "" && mime == "" {
 			continue
 		}

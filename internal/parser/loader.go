@@ -19,8 +19,8 @@ func (p *Parser) LoadFile(path string) ([]Rule, error) {
 }
 
 // LoadDirectory scans a folder and parses all magic files found inside.
-// The vendored tree at magic/upstream/Magdir is gated by magic/allowlist:
-// only listed basenames are opened. Other directories are loaded in full.
+// magic/Magdir is gated by magic/allowlist: only listed basenames are opened.
+// Other directories, including magic/fixtures, are loaded in full.
 func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 	var allRootRules []Rule
 
@@ -77,13 +77,13 @@ func (p *Parser) LoadDirectory(dirPath string) ([]Rule, error) {
 }
 
 // allowlistFor returns the basename set that gates dirPath.
-// It applies only to magic/upstream/Magdir, whose list is magic/allowlist.
-// gated is false when that file is absent, and every magic file is loaded.
+// It applies to a directory named Magdir when ../allowlist exists.
+// gated is false otherwise, and every magic file is loaded.
 func allowlistFor(dirPath string) (map[string]struct{}, bool, error) {
-	if filepath.Base(filepath.Dir(dirPath)) != "upstream" {
+	if filepath.Base(dirPath) != "Magdir" {
 		return nil, false, nil
 	}
-	path := filepath.Join(dirPath, "..", "..", "allowlist")
+	path := filepath.Join(dirPath, "..", "allowlist")
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
