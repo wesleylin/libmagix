@@ -519,6 +519,79 @@ func TestUpstreamAllowlistIdentification(t *testing.T) {
 	}
 }
 
+func TestDiskMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	blcr := make([]byte, 24)
+	copy(blcr, []byte{'C', 0, 0, 0, 'R', 0, 0, 0})
+	binary.LittleEndian.PutUint32(blcr[8:], 1)
+	binary.LittleEndian.PutUint32(blcr[16:], 5)
+	dump := make([]byte, 32)
+	binary.LittleEndian.PutUint32(dump[0:], 1)
+	binary.LittleEndian.PutUint32(dump[24:], 60012)
+	luks := make([]byte, 200)
+	copy(luks, []byte{'L', 'U', 'K', 'S', 0xba, 0xbe})
+	binary.BigEndian.PutUint16(luks[6:], 1)
+	copy(luks[8:], "aes")
+	copy(luks[40:], "xts-plain64")
+	copy(luks[72:], "sha256")
+	partclone := make([]byte, 40)
+	copy(partclone, "partclone-image")
+	copy(partclone[15:], "ext4")
+	copy(partclone[30:], "0001")
+	zfs := make([]byte, 64)
+	copy(zfs[8:], []byte{0xac, 0xcb, 0xba, 0xf5, 0x02, 0, 0, 0})
+	binary.LittleEndian.PutUint32(zfs[16:], 1)
+	binary.LittleEndian.PutUint32(zfs[32:], 2)
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "blcr", data: blcr, msg: "BLCR x86-64 context data (little endian, version 1)"},
+		{name: "dump", data: dump, msg: "new-fs dump file (little endian), This dump Thu Jan  1 00:00:00 1970, Previous dump Thu Jan  1 00:00:00 1970, tape header,"},
+		{name: "fusecompress", data: []byte{0x1f, 0x5d, 0x89, 0x02, 0, 0, 0, 0}, msg: "FuseCompress(ed) data (gz format) uncompressed size: 0"},
+		{name: "gpt", data: append([]byte("EFI PART"), make([]byte, 64)...), msg: "GPT data structure (nonstandard: at LBA 0), version 0.0, GUID: 00000000-0000-0000-0000-000000000000, disk size: 1 sectors (sector size unknown)"},
+		{name: "isz", data: append([]byte("IsZ!"), 16, 1, 0, 0, 7, 0, 0, 0), msg: "ISO Zipped file, header size 16, version 1, serial 7"},
+		{name: "luks", data: luks, msg: "LUKS encrypted file, ver 1 [aes, xts-plain64, sha256] UUID: , at 0 data, 0 key bytes, MK digest 0000000000000000000000000000000000000000, MK salt 0000000000000000000000000000000000000000000000000000000000000000, 0 MK iterations"},
+		{name: "partclone", data: partclone, msg: "Partclone image, version 0001, filesystem: ext4"},
+		{name: "zfs", data: zfs, msg: "ZFS snapshot (little-endian machine), version 1, type: ZFS, destination GUID: 00 00 00 00 00 00 00 00,"},
+		{name: "dwarfs", data: dwarfsImage(), msg: "DwarFS File System Image, version 2.5, uncompressed"},
+		{name: "dwarfs-prefix", data: append([]byte("DWARFS"), make([]byte, 74)...), msg: ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if tc.msg == "" {
+				if got != nil && strings.Contains(got.Message, "DwarFS") {
+					t.Fatalf("Identify() = %q, want no DwarFS description", got.Message)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
+// dwarfsImage is two section headers. The first has a zero section number
+// and type, no payload, so the next header sits at offset 0x40.
+func dwarfsImage() []byte {
+	img := make([]byte, 0x48)
+	copy(img, "DWARFS")
+	img[6], img[7] = 2, 5
+	copy(img[0x40:], "DWARFS")
+	img[0x46], img[0x47] = 2, 5
+	return img
+}
+
 func TestExecutableMagdir(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	engine, err := libmagix.New("magic/Magdir", logger)

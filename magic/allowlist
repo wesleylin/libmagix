@@ -67,6 +67,16 @@ mips
 msvc
 webassembly
 xo65
+# Disk images and filesystems.
+blcr
+dwarfs
+dump
+fusecompress
+gpt
+isz
+luks
+partclone
+zfs
 # Language source and bytecode. Matching is on content, not the filename.
 python
 perl

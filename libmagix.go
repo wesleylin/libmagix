@@ -199,11 +199,13 @@ func (m *Magix) collect(data []byte, textPass, cont, looksText bool) []hit {
 		}
 		var fullMsg strings.Builder
 		var lastMime string
-		m.identifyRecursive(data, r, 0, matchedOffset, false, val, false, &fullMsg, &lastMime, 0)
+		anchored := false
+		m.identifyRecursive(data, r, 0, matchedOffset, false, val, false, &fullMsg, &lastMime, &anchored, 0)
 		// A level-0 test with an empty description does not count as a hit
-		// unless a continuation printed something. libmagic keeps scanning.
+		// unless a continuation printed a real description. A "\b" fragment
+		// alone, such as dwarfs compression with no second magic, does not.
 		msg := strings.TrimSpace(fullMsg.String())
-		if msg == "" && lastMime == "" {
+		if (!anchored || msg == "") && lastMime == "" {
 			continue
 		}
 		hits = append(hits, hit{
@@ -241,23 +243,23 @@ func joinHits(hits []hit) (string, string) {
 	return b.String(), mime
 }
 
-func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relativeBase int64, inUse bool, val any, flip bool, fullMsg *strings.Builder, lastMime *string, depth int) {
+func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relativeBase int64, inUse bool, val any, flip bool, fullMsg *strings.Builder, lastMime *string, anchored *bool, depth int) {
 	if r.Type == "indirect" {
-		appendMagicText(fullMsg, parser.FormatMessage(r.Message, r.Type, val))
+		appendMagicText(fullMsg, parser.FormatMessage(r.Message, r.Type, val), anchored)
 		// file stops an indirect chain at FILE_INDIR_MAX (50). Three
 		// skippable frames sit in front of one zstd frame, and each
 		// frame takes one hop.
 		if depth < 50 {
-			m.identifyAt(data, relativeBase, fullMsg, lastMime, depth+1)
+			m.identifyAt(data, relativeBase, fullMsg, lastMime, anchored, depth+1)
 		}
-		m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, depth)
+		m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, anchored, depth)
 		return
 	}
 	if r.Type == "use" {
 		// Continuations of the use line run only after the named block
 		// matches. Their relative base is the offset where the use was entered.
-		if m.execUse(data, r, relativeBase, flip, fullMsg, lastMime, depth) {
-			m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, depth)
+		if m.execUse(data, r, relativeBase, flip, fullMsg, lastMime, anchored, depth) {
+			m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, anchored, depth)
 		}
 		return
 	}
@@ -265,9 +267,9 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relati
 	if r.Mime != "" {
 		*lastMime = r.Mime
 	}
-	appendMagicText(fullMsg, parser.FormatMessage(r.Message, r.Type, val))
+	appendMagicText(fullMsg, parser.FormatMessage(r.Message, r.Type, val), anchored)
 
-	m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, depth)
+	m.walk(data, r.Children, plainBase, relativeBase, inUse, flip, fullMsg, lastMime, anchored, depth)
 }
 
 // walk scans rules that share a continuation level.
@@ -275,7 +277,7 @@ func (m *Magix) identifyRecursive(data []byte, r *parser.Rule, plainBase, relati
 // clear resets that flag so a later default can still run.
 // Inside a subroutine, direct offsets stay relative to plainBase (the use).
 // '&' offsets stay relative to relativeBase (the end of the previous match).
-func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase int64, inUse, flip bool, fullMsg *strings.Builder, lastMime *string, depth int) bool {
+func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase int64, inUse, flip bool, fullMsg *strings.Builder, lastMime *string, anchored *bool, depth int) bool {
 	gotMatch := false
 	matchedAny := false
 	for i := range rules {
@@ -302,23 +304,23 @@ func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase i
 			continue
 		}
 		if r.Type == "clear" {
-			m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime, depth)
+			m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime, anchored, depth)
 			gotMatch = false
 			continue
 		}
 		if r.Type == "use" {
 			// A use that misses does not block a later default at this level.
-			if !m.execUse(data, &r, off, flip, fullMsg, lastMime, depth) {
+			if !m.execUse(data, &r, off, flip, fullMsg, lastMime, anchored, depth) {
 				continue
 			}
 			gotMatch = true
 			matchedAny = true
-			m.walk(data, r.Children, plainBase, off, inUse, flip, fullMsg, lastMime, depth)
+			m.walk(data, r.Children, plainBase, off, inUse, flip, fullMsg, lastMime, anchored, depth)
 			continue
 		}
 		gotMatch = true
 		matchedAny = true
-		m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime, depth)
+		m.identifyRecursive(data, &r, plainBase, off, inUse, val, flip, fullMsg, lastMime, anchored, depth)
 	}
 	return matchedAny
 }
@@ -327,7 +329,7 @@ func (m *Magix) walk(data []byte, rules []parser.Rule, plainBase, relativeBase i
 // indirect rules use this to describe the bytes they point at. file
 // copies that tail into its own buffer, so a nested "(4.l+8)" is
 // measured from there.
-func (m *Magix) identifyAt(data []byte, base int64, fullMsg *strings.Builder, lastMime *string, depth int) {
+func (m *Magix) identifyAt(data []byte, base int64, fullMsg *strings.Builder, lastMime *string, anchored *bool, depth int) {
 	if base < 0 || base > int64(len(data)) {
 		return
 	}
@@ -339,9 +341,13 @@ func (m *Magix) identifyAt(data []byte, base int64, fullMsg *strings.Builder, la
 		}
 		var nested strings.Builder
 		var mime string
-		m.identifyRecursive(view, &m.rules[i], 0, off, false, val, false, &nested, &mime, depth)
-		if strings.TrimSpace(nested.String()) == "" && mime == "" {
+		nestedAnchored := false
+		m.identifyRecursive(view, &m.rules[i], 0, off, false, val, false, &nested, &mime, &nestedAnchored, depth)
+		if (!nestedAnchored || strings.TrimSpace(nested.String()) == "") && mime == "" {
 			continue
+		}
+		if nestedAnchored {
+			*anchored = true
 		}
 		text := nested.String()
 		if text != "" && fullMsg.Len() > 0 && !strings.HasSuffix(fullMsg.String(), " ") && text[0] != ' ' {
@@ -355,7 +361,7 @@ func (m *Magix) identifyAt(data []byte, base int64, fullMsg *strings.Builder, la
 	}
 }
 
-func (m *Magix) execUse(data []byte, r *parser.Rule, useOffset int64, flip bool, fullMsg *strings.Builder, lastMime *string, depth int) bool {
+func (m *Magix) execUse(data []byte, r *parser.Rule, useOffset int64, flip bool, fullMsg *strings.Builder, lastMime *string, anchored *bool, depth int) bool {
 	name, ok := r.Value.(string)
 	if !ok {
 		return false
@@ -373,19 +379,21 @@ func (m *Magix) execUse(data []byte, r *parser.Rule, useOffset int64, flip bool,
 	// the text already there. Roll back when the subroutine misses.
 	saved := fullMsg.String()
 	savedMime := *lastMime
+	savedAnchored := *anchored
 	if subRule.Message != "" {
-		appendMagicText(fullMsg, parser.FormatMessage(subRule.Message, subRule.Type, nil))
+		appendMagicText(fullMsg, parser.FormatMessage(subRule.Message, subRule.Type, nil), anchored)
 	}
-	if !m.walk(data, subRule.Children, useOffset, useOffset, true, flip, fullMsg, lastMime, depth) {
+	if !m.walk(data, subRule.Children, useOffset, useOffset, true, flip, fullMsg, lastMime, anchored, depth) {
 		fullMsg.Reset()
 		fullMsg.WriteString(saved)
 		*lastMime = savedMime
+		*anchored = savedAnchored
 		return false
 	}
 	return true
 }
 
-func appendMagicText(fullMsg *strings.Builder, msg string) {
+func appendMagicText(fullMsg *strings.Builder, msg string, anchored *bool) {
 	if msg == "" {
 		return
 	}
@@ -393,6 +401,7 @@ func appendMagicText(fullMsg *strings.Builder, msg string) {
 		fullMsg.WriteString(msg[2:])
 		return
 	}
+	*anchored = true
 	if fullMsg.Len() > 0 && !strings.HasSuffix(fullMsg.String(), " ") {
 		fullMsg.WriteString(" ")
 	}
