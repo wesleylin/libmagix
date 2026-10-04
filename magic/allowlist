@@ -77,7 +77,7 @@ isz
 luks
 partclone
 zfs
-# Media. matroska is the same 0x1a45dfa3 test as ebml, so it stays off.
+# Media. matroska's blank level-0 line outranks ebml's same test.
 asf
 bm
 blender
@@ -91,6 +91,7 @@ fonts
 gimp
 icc
 iff
+matroska
 mup
 music
 pbm
