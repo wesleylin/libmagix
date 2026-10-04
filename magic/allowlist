@@ -247,6 +247,37 @@ vms
 x68000
 xenix
 zilog
+# Text, mail, and markup.
+applix
+claris
+commands
+console
+diff
+editors
+frame
+gnumeric
+interleaf
+ispell
+locoscript
+mail.news
+make
+mime
+mmdf
+news
+oasis
+pgf
+rst
+sc
+sendmail
+sisu
+softquad
+sylk
+tex
+troff
+typeset
+unicode
+uuencode
+varied.out
 # Development tools and revision files.
 coverage
 ctags

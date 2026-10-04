@@ -933,6 +933,73 @@ func TestPlatformMagdir(t *testing.T) {
 	}
 }
 
+func TestTextMailMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prose := range []string{
+		"Hello, world.\n",
+		"The quick brown fox jumps over the lazy dog.\n",
+		"package main\n\nimport \"fmt\"\n",
+	} {
+		got := engine.Identify([]byte(prose))
+		if got == nil || !strings.HasPrefix(got.Message, "ASCII text") {
+			t.Errorf("prose %q identified as %v", prose, got)
+		}
+	}
+	gnumeric := append(make([]byte, 39), []byte("<gmr:Workbook")...)
+	sc := append(make([]byte, 38), []byte("Spreadsheet")...)
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "applix", data: []byte("*BEGIN\n"), msg: "Applixware"},
+		{name: "claris", data: []byte{0x10, 0xe1, 0x00, 0x00, 0x08, 0x08}, msg: "Claris Works palette files .plt"},
+		{name: "commands", data: []byte("#!/bin/sh\n"), msg: "POSIX shell script, ASCII text executable"},
+		{name: "console", data: []byte("NES\x1a"), msg: "NES ROM image (iNES)"},
+		{name: "diff", data: []byte("diff -u a b\n"), msg: "diff output, ASCII text"},
+		{name: "editors", data: []byte("@CT \n"), msg: "T602 document data,"},
+		{name: "frame", data: []byte("<MIFFile\n"), msg: "FrameMaker MIF (ASCII) file"},
+		{name: "gnumeric", data: gnumeric, msg: "Gnumeric spreadsheet"},
+		{name: "interleaf", data: []byte{0x88, 'O', 'P', 'S', '\n'}, msg: "Interleaf saved data"},
+		{name: "ispell", data: []byte{0x00, 0x96}, msg: "little endian ispell hash file (?),"},
+		{name: "locoscript", data: []byte("JOY\x01\x01"), msg: "LocoScript 1 document"},
+		{name: "mail.news", data: []byte("Received:\n"), msg: "RFC 822 mail text"},
+		{name: "make", data: []byte("all:\n"), msg: "makefile script, ASCII text"},
+		{name: "mime", data: []byte("Content-Type: text/plain\n"), msg: "text/plain, ASCII text"},
+		{name: "mmdf", data: []byte("\x01\x01\x01\x01\nFrom \n"), msg: "MMDF mailbox"},
+		{name: "news", data: []byte("StartFontMetrics\n"), msg: "ASCII font metrics"},
+		{name: "oasis", data: []byte("%SEMI-OASIS\r\n\n"), msg: "OASIS Stream file"},
+		{name: "pgf", data: []byte("PGF\n"), msg: "Progressive Graphics image data,"},
+		{name: "rst", data: []byte("====\n====\n:Author: me\n"), msg: "ReStructuredText file, ASCII text"},
+		{name: "sc", data: sc, msg: "sc spreadsheet file"},
+		{name: "sendmail", data: []byte("divert(-1)\n\n"), msg: "sendmail m4 text file"},
+		{name: "sisu", data: []byte("SiSU text\n"), msg: "SiSU, ASCII text"},
+		{name: "softquad", data: []byte("<!SQ DTD>\n"), msg: "Compiled SGML rules file Type"},
+		{name: "sylk", data: []byte("ID;PGnumeric\n"), msg: "spreadsheet interchange document, created by Gnumeric"},
+		{name: "tex", data: []byte{0xf7, 0x83}, msg: "TeX generic font data"},
+		{name: "troff", data: []byte{0x40, 0xef}, msg: "very old (C/A/T) troff output data"},
+		{name: "typeset", data: []byte("Interpress/Xerox\n"), msg: "Xerox InterPress data"},
+		{name: "unicode", data: []byte("+/v8\n"), msg: "Unicode text, UTF-7"},
+		{name: "uuencode", data: []byte("xbtoa Begin\n"), msg: "btoa'd, ASCII text"},
+		{name: "varied.out", data: []byte("Joy!peffpwpc"), msg: "header for PowerPC PEF executable"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 func TestNetworkMagdir(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	engine, err := libmagix.New("magic/Magdir", logger)
