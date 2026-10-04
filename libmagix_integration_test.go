@@ -641,6 +641,57 @@ func TestMediaMagdir(t *testing.T) {
 	}
 }
 
+func TestSecurityMagdir(t *testing.T) {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	engine, err := libmagix.New("magic/Magdir", logger)
+	if err != nil {
+		t.Fatal(err)
+	}
+	btc := make([]byte, 96)
+	copy(btc, []byte{0xf9, 0xbe, 0xb4, 0xd9})
+	cases := []struct {
+		name string
+		data []byte
+		msg  string
+	}{
+		{name: "aes", data: []byte("AES\x00\x00"), msg: "AES encrypted data, version 0"},
+		{name: "cracklib", data: []byte{0x31, 0x56, 0x77, 0x70, 0, 0, 0, 1}, msg: "Cracklib password index, little endian (1 words)"},
+		{name: "bitcoin", data: btc, msg: "Bitcoin block, size 0, version 0x0, Thu Jan  1 00:00:00 1970 UTC, txcount 0"},
+		{name: "scrypt", data: append([]byte("scrypt\x00"), make([]byte, 12)...), msg: "scrypt encrypted file, N=2**0, r=0, p=0"},
+		{name: "age", data: []byte("age-encryption.org/v1\n"), msg: "age encrypted file"},
+		{name: "fsav", data: []byte{0x15, 0x75}, msg: "fsav macro virus signatures"},
+		{name: "clamav", data: []byte("ClamAV-VDB:"), msg: "Clam AntiVirus file"},
+		{name: "avg", data: []byte("AVG7_ANTIVIRUS_VAULT_FILE"), msg: "AVG 7 Antivirus vault file data"},
+		{name: "gringotts", data: []byte("GRG1"), msg: "Gringotts data file v.1, MCRYPT S2K, SERPENT crypt, SHA-256 hash, ZLib lvl.9"},
+		{name: "keepass", data: []byte{0x03, 0xd9, 0xa2, 0x9a, 0x67, 0xfb, 0x4b, 0xb5}, msg: "Keepass password database 2.x KDBX"},
+		{name: "kerberos", data: []byte{0x05, 0x02, 0x00, 0x00}, msg: "Kerberos Keytab file"},
+		{name: "mcrypt", data: []byte{0x00, 'm', 0x02, 0x00}, msg: "mcrypt 2.2 encrypted data, algorithm: blowfish-448,"},
+		{name: "opentimestamps", data: []byte("\x00OpenTimestamps\x00"), msg: "OpenTimestamps"},
+		{name: "pgp", data: []byte("-----BEGIN PGP MESSAGE-\n"), msg: "PGP message"},
+		{name: "pwsafe", data: []byte("PWS3"), msg: "Password Safe V3 database"},
+		{name: "securitycerts", data: []byte("-----BEGIN NEW CERTIFICATE\n"), msg: "RFC1421 Security Certificate Signing Request, ASCII text"},
+		{name: "jks", data: []byte{0xed, 0xfe, 0xed, 0xfe}, msg: "Sun 'jks' Java Keystore File data"},
+		{name: "selinux", data: []byte{0x8f, 0xff, 0x7c, 0xf9, 1, 0, 0, 0}, msg: "SE Linux modular policy version 1,"},
+		{name: "selinux-source", data: []byte("\npolicy_module(foo)\n"), msg: "SE Linux policy module source"},
+		{name: "ssh", data: []byte("-----BEGIN OPENSSH PRIVATE KEY-----\n"), msg: "OpenSSH private key"},
+		{name: "ssh-ed25519", data: []byte("ssh-ed25519 AAAA"), msg: "OpenSSH ED25519 public key"},
+		{name: "ssl", data: []byte("-----BEGIN CERTIFICATE-----\n"), msg: "PEM certificate"},
+		{name: "openssl", data: []byte("Salted__"), msg: "openssl enc'd data with salted password"},
+		{name: "yara", data: []byte{'Y', 'A', 'R', 'A', 0, 8, 0, 0, 11}, msg: "YARA 3.x compiled rule set created with version 3.5.0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := engine.Identify(tc.data)
+			if got == nil {
+				t.Fatalf("Identify() = nil, want %q", tc.msg)
+			}
+			if got.Message != tc.msg {
+				t.Errorf("message = %q, want %q", got.Message, tc.msg)
+			}
+		})
+	}
+}
+
 // dwarfsImage is two section headers. The first has a zero section number
 // and type, no payload, so the next header sits at offset 0x40.
 func dwarfsImage() []byte {
